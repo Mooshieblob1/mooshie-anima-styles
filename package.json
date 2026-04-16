@@ -1,0 +1,21 @@
+{
+  "name": "mooshie-anima-styles",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^5",
+    "@tailwindcss/vite": "^4",
+    "@tsconfig/svelte": "^5.0.8",
+    "svelte": "^5",
+    "svelte-check": "^4",
+    "tailwindcss": "^4",
+    "typescript": "^5",
+    "vite": "^6"
+  }
+}
