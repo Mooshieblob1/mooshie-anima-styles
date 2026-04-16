@@ -85,9 +85,14 @@
       class="w-full max-w-[92vw] flex flex-wrap items-center justify-between gap-3 rounded-lg border border-neutral-800 bg-neutral-900/90 px-4 py-3"
     >
       <div class="min-w-0 flex-1">
-        <div class="truncate text-base font-medium text-red-400">
+        <a
+          href="https://danbooru.donmai.us/artists/show_or_new?name={encodeURIComponent(entry.tag.replace(/^@/, ''))}"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="block truncate text-base font-medium text-red-400 hover:underline"
+        >
           {displayTag(entry.tag)}
-        </div>
+        </a>
         <div class="mt-0.5 text-xs text-neutral-500">
           {entry.postCount.toLocaleString()} posts
           {#if entry.aliases.length > 0}

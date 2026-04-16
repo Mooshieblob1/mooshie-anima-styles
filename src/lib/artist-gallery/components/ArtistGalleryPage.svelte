@@ -68,6 +68,17 @@
   let searchDebounce: number | null = null;
   let showSuggestions = $state(false);
 
+  type Theme = "light" | "dark" | "auto";
+  let theme = $state<Theme>((localStorage.getItem("theme") as Theme) ?? "auto");
+  // Logarithmic card sizing: slider is 0–100, maps to 100–400px via power curve.
+  // Default 60 ≈ 230px (previous preferred size).
+  const CARD_PX_MIN = 100, CARD_PX_MAX = 400;
+  let cardSliderVal = $state(Number(localStorage.getItem("cardSliderVal") || "60"));
+  const cardMinWidth = $derived(
+    Math.round(CARD_PX_MIN * (CARD_PX_MAX / CARD_PX_MIN) ** (cardSliderVal / 100))
+  );
+  let systemDark = $state(window.matchMedia("(prefers-color-scheme: dark)").matches);
+
   onMount(() => {
     store.init().then(async () => {
       allLoading = true;
@@ -81,6 +92,13 @@
         allLoading = false;
       }
     });
+  });
+
+  onMount(() => {
+    const mq = window.matchMedia("(prefers-color-scheme: dark)");
+    const handler = (e: MediaQueryListEvent) => { systemDark = e.matches; };
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
   });
 
   function onSearchInput(value: string) {
@@ -213,6 +231,9 @@
   // ---------------------------------------------------------------------------
   const _preloadCache = new Map<string, HTMLImageElement>();
 
+  const _currentYear = new Date().getFullYear();
+  const copyrightYear = _currentYear > 2026 ? `2026\u2013${_currentYear}` : '2026';
+
   const _preloadUrls = $derived.by(() => {
     if (!store.manifest) return [] as string[];
     const { imageBaseUrl, releasePrefix } = store.manifest;
@@ -242,13 +263,48 @@
       if (!urlSet.has(url)) _preloadCache.delete(url);
     }
   });
+
+  $effect(() => {
+    localStorage.setItem("theme", theme);
+    localStorage.setItem("cardSliderVal", String(cardSliderVal));
+    const isLight = theme === "light" || (theme === "auto" && !systemDark);
+    document.documentElement.classList.toggle("light", isLight);
+  });
 </script>
 
 <div class="flex h-full w-full flex-col overflow-hidden bg-neutral-950 text-neutral-100">
-  <header class="flex-none border-b border-neutral-800 bg-neutral-900/60 px-4 py-3">
-    <div class="flex flex-wrap items-center justify-between gap-3">
-      <div>
-        <h1 class="text-lg font-semibold">Artist Gallery</h1>
+  <header class="relative flex-none border-b border-neutral-800 bg-neutral-900/60 px-4 py-3">
+    <!-- MooshieUI promo -->
+    <div class="absolute left-4 top-3">
+      <a
+        href="https://github.com/Mooshieblob1/MooshieUI"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="flex items-center gap-1.5 rounded-lg border border-neutral-800 bg-neutral-900/50 px-2 py-1 text-xs text-neutral-400 transition-colors hover:border-indigo-500 hover:text-neutral-200"
+        title="MooshieUI — a beginner-friendly ComfyUI front-end"
+      >
+        <svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+        <span>Enjoy this? Try <span class="text-indigo-400">MooshieUI</span> to generate AI art!</span>
+      </a>
+    </div>
+    <!-- Theme toggle -->
+    <div class="absolute right-4 top-3 flex items-center gap-0.5 rounded-lg border border-neutral-800 bg-neutral-900/50 p-1">
+      <button type="button" class="rounded px-2 py-0.5 text-xs transition-colors {theme === 'auto' ? 'bg-indigo-600 text-white' : 'text-neutral-400 hover:text-neutral-200'}" onclick={() => (theme = 'auto')} title="Auto (system)">⚙</button>
+      <button type="button" class="rounded px-2 py-0.5 text-xs transition-colors {theme === 'light' ? 'bg-indigo-600 text-white' : 'text-neutral-400 hover:text-neutral-200'}" onclick={() => (theme = 'light')} title="Light">☀</button>
+      <button type="button" class="rounded px-2 py-0.5 text-xs transition-colors {theme === 'dark' ? 'bg-indigo-600 text-white' : 'text-neutral-400 hover:text-neutral-200'}" onclick={() => (theme = 'dark')} title="Dark">🌙</button>
+    </div>
+    <div class="flex flex-col items-center gap-3">
+      <div class="flex flex-col items-center text-center">
+        <h1 class="text-[1.265rem] font-semibold">Anima Style Gallery</h1>
+        <p class="text-xs text-neutral-500">
+          created by <a
+            href="https://github.com/Mooshieblob1"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="text-indigo-400 hover:text-indigo-300 transition-colors"
+          >Mooshieblob</a>
+        </p>
+        <p class="text-xs text-emerald-500 font-medium">Free forever</p>
         <p class="text-xs text-neutral-500">
           {#if store.manifest}
             {store.manifest.artistsWithImage.toLocaleString()} artists ·
@@ -312,7 +368,11 @@
 
     <!-- Sort + page size toolbar -->
     {#if store.manifest}
-      <div class="mt-3 flex flex-wrap items-center gap-2">
+      <div class="mt-3 flex flex-wrap items-center justify-center gap-2">
+        <div class="flex items-center gap-1.5 rounded-lg border border-neutral-800 bg-neutral-900/50 px-2 py-1">
+          <span class="text-xs text-neutral-500">Size:</span>
+          <input type="range" min="0" max="100" step="1" bind:value={cardSliderVal} class="w-20 accent-indigo-500" />
+        </div>
         <div class="flex items-center gap-0.5 rounded-lg border border-neutral-800 bg-neutral-900/50 p-1">
           <span class="px-1.5 text-xs text-neutral-500">Sort:</span>
           <button
@@ -391,6 +451,7 @@
     {:else if allLoading}
       <div class="p-8 text-center text-sm text-neutral-500">loading artists…</div>
     {:else}
+      <p class="pt-3 text-center text-xs text-neutral-500">Right click a card to copy a tag</p>
       {#if totalPages > 1}
         <div class="flex items-center justify-center gap-3 border-b border-neutral-800/60 px-4 py-2">
           <button
@@ -416,7 +477,7 @@
           </button>
         </div>
       {/if}
-      <div class="grid grid-cols-[repeat(auto-fill,minmax(140px,1fr))] gap-3 p-4">
+      <div class="grid gap-3 p-4" style="grid-template-columns: repeat(auto-fill, minmax({cardMinWidth}px, 1fr))">
         {#each pageEntries as hit, i (hit.slug)}
           {@const url = thumbUrl(hit)}
           {@const rank = (safePage - 1) * pageSize + i + 1}
@@ -488,6 +549,32 @@
       {/if}
     {/if}
   </div>
+
+  <footer class="flex-none border-t border-neutral-800 bg-neutral-900/60 px-4 py-2">
+    <div class="flex flex-wrap items-center justify-center gap-3 text-xs text-neutral-500">
+      <a
+        href="https://github.com/Mooshieblob1"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="flex items-center gap-1.5 text-neutral-400 transition-colors hover:text-neutral-200"
+        aria-label="Mooshieblob1 on GitHub"
+      >
+        <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor" aria-hidden="true">
+          <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/>
+        </svg>
+        Mooshieblob1
+      </a>
+      <span>·</span>
+      <span>© {copyrightYear} Mooshieblob</span>
+      <span>·</span>
+      <span>created with <a
+        href="https://gpu.garden"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="text-indigo-400 transition-colors hover:text-indigo-300"
+      >fartcore</a></span>
+    </div>
+  </footer>
 </div>
 
 {#if active}

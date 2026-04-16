@@ -1,7 +1,26 @@
 @import "tailwindcss";
 
+html {
+  font-size: 110%;
+}
+
 html, body, #app {
   height: 100%;
   margin: 0;
   padding: 0;
+}
+
+/* Light theme: invert the neutral scale so existing dark-coded classes render correctly */
+.light {
+  --color-neutral-50:  oklch(14.5% 0 0);
+  --color-neutral-100: oklch(20.5% 0 0);
+  --color-neutral-200: oklch(26.9% 0 0);
+  --color-neutral-300: oklch(37.1% 0 0);
+  --color-neutral-400: oklch(43.9% 0 0);
+  --color-neutral-600: oklch(70.8% 0 0);
+  --color-neutral-700: oklch(87%   0 0);
+  --color-neutral-800: oklch(92.2% 0 0);
+  --color-neutral-900: oklch(97%   0 0);
+  --color-neutral-950: oklch(98.5% 0 0);
+  --color-red-400: oklch(42% 0.2 25);
 }
