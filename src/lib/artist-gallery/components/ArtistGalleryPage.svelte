@@ -45,6 +45,7 @@
   function rotateUniqueness() {
     uniquenessJitter = generateJitter(allEntries.length);
     sortField = "uniqueness";
+    cardAnimKey++;
     currentPage = 1;
     requestAnimationFrame(() => {
       scrollContainer?.scrollTo({ top: 0, behavior: "instant" });
@@ -83,7 +84,8 @@
   // Favourites
   // ---------------------------------------------------------------------------
   let favourites = $state<Set<string>>(new Set(JSON.parse(localStorage.getItem("favourites") || "[]")));
-  let favouritesFirst = $state(localStorage.getItem("favouritesFirst") !== "false");
+  let showFavouritesOnly = $state(false);
+  let cardAnimKey = $state(0);
 
   function toggleFavourite(slug: string, e: MouseEvent) {
     e.stopPropagation();
@@ -205,6 +207,7 @@
       return;
     }
     sortField = field;
+    cardAnimKey++;
     currentPage = 1;
     requestAnimationFrame(() => {
       scrollContainer?.scrollTo({ top: 0, behavior: "instant" });
@@ -214,6 +217,7 @@
 
   function setDir(dir: SortDir) {
     sortDir = dir;
+    cardAnimKey++;
     currentPage = 1;
     requestAnimationFrame(() => {
       scrollContainer?.scrollTo({ top: 0, behavior: "instant" });
@@ -246,10 +250,8 @@
           : (a.postCount - b.postCount) * dir,
       );
     }
-    if (favouritesFirst && favourites.size > 0) {
-      const favs = entries.filter(e => favourites.has(e.slug));
-      const rest = entries.filter(e => !favourites.has(e.slug));
-      return [...favs, ...rest];
+    if (showFavouritesOnly) {
+      return entries.filter(e => favourites.has(e.slug));
     }
     return entries;
   });
@@ -298,10 +300,11 @@
     }
   });
 
+  let showGenInfo = $state(false);
+
   $effect(() => {
     localStorage.setItem("theme", theme);
     localStorage.setItem("cardSliderVal", String(cardSliderVal));
-    localStorage.setItem("favouritesFirst", String(favouritesFirst));
     const isLight = theme === "light" || (theme === "auto" && !systemDark);
     document.documentElement.classList.toggle("light", isLight);
   });
@@ -343,7 +346,8 @@
         <p class="text-xs text-neutral-500">
           {#if store.manifest}
             {store.manifest.artistsWithImage.toLocaleString()} artists ·
-            Anima preview · release {store.manifest.releasePrefix}
+            Anima preview · release {store.manifest.releasePrefix} ·
+            <button type="button" onclick={() => (showGenInfo = true)} class="text-neutral-500 underline decoration-dotted hover:text-neutral-300 transition-colors">ℹ gen params</button>
           {:else if store.manifestError}
             <span class="text-red-400">failed to load: {store.manifestError}</span>
           {:else}
@@ -408,10 +412,11 @@
           <span class="text-xs text-neutral-500">Size:</span>
           <input type="range" min="0" max="100" step="1" bind:value={cardSliderVal} class="w-20 accent-indigo-500" />
         </div>
-        <label class="flex cursor-pointer items-center gap-1.5 rounded-lg border border-neutral-800 bg-neutral-900/50 px-2 py-1 text-xs text-neutral-400 transition-colors hover:text-neutral-200 {favouritesFirst ? 'border-pink-600/60 text-pink-400' : ''}">
-          <input type="checkbox" bind:checked={favouritesFirst} class="accent-pink-500" />
-          <span>♥ Favourites first</span>
-        </label>
+        <button
+          type="button"
+          onclick={() => { showFavouritesOnly = !showFavouritesOnly; cardAnimKey++; }}
+          class="flex items-center gap-1.5 rounded-lg border bg-neutral-900/50 px-2 py-1 text-xs transition-colors {showFavouritesOnly ? 'border-pink-600/60 text-pink-400 hover:text-pink-300' : 'border-neutral-800 text-neutral-400 hover:text-neutral-200'}"
+        >♥ Favourites{#if favourites.size > 0} ({favourites.size}){/if}</button>
         <div class="flex items-center gap-0.5 rounded-lg border border-neutral-800 bg-neutral-900/50 p-1">
           <span class="px-1.5 text-xs text-neutral-500">Sort:</span>
           <button
@@ -516,6 +521,7 @@
           </button>
         </div>
       {/if}
+      {#key cardAnimKey}
       <div class="grid gap-3 p-4" style="grid-template-columns: repeat(auto-fill, minmax({cardMinWidth}px, 1fr))">
         {#each pageEntries as hit, i (hit.slug)}
           {@const url = thumbUrl(hit)}
@@ -523,7 +529,8 @@
           <div
             role="button"
             tabindex="0"
-            class="group flex flex-col items-stretch overflow-hidden rounded-lg border bg-neutral-900 text-left transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-500 {copiedSlug === hit.slug ? 'border-emerald-500' : favourites.has(hit.slug) ? 'border-pink-700 hover:border-pink-500' : 'border-neutral-800 hover:border-indigo-500'}"
+            style="animation-delay: {Math.min(i * 30, 450)}ms"
+            class="card-slide group flex flex-col items-stretch overflow-hidden rounded-lg border bg-neutral-900 text-left transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-500 {copiedSlug === hit.slug ? 'border-emerald-500' : favourites.has(hit.slug) ? 'border-pink-700 hover:border-pink-500' : 'border-neutral-800 hover:border-indigo-500'}"
             onclick={() => openHit(hit.slug, i)}
             onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openHit(hit.slug, i); } }}
             oncontextmenu={(e) => { e.preventDefault(); void copyTag(hit.tag, hit.slug); }}
@@ -568,6 +575,7 @@
           </div>
         {/each}
       </div>
+      {/key}
 
       <!-- Pagination -->
       {#if totalPages > 1}
@@ -634,3 +642,118 @@
     onnext={activeIndex >= 0 && activeIndex < pageEntries.length - 1 ? () => navigateTo(activeIndex + 1) : undefined}
   />
 {/if}
+
+{#if showGenInfo}
+  <div
+    class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm"
+    role="dialog"
+    aria-modal="true"
+    aria-label="Generation parameters"
+  >
+    <button type="button" class="absolute inset-0 h-full w-full cursor-default" aria-label="Close" onclick={() => (showGenInfo = false)}></button>
+    <div class="relative z-10 w-full max-w-lg rounded-xl border border-neutral-700 bg-neutral-900 p-6 shadow-2xl mx-4 max-h-[90vh] overflow-y-auto">
+      <button
+        type="button"
+        onclick={() => (showGenInfo = false)}
+        class="absolute right-4 top-4 text-neutral-500 hover:text-neutral-200 transition-colors text-lg leading-none"
+        aria-label="Close"
+      >✕</button>
+      <h2 class="mb-4 text-base font-semibold text-neutral-100">How preview images are generated</h2>
+      <p class="mb-4 text-xs text-neutral-500">Each artist card image is generated using the artist's tag as the sole prompt token. No additional positive or negative prompts are used — this isolates each artist's raw style.</p>
+
+      <h3 class="mb-2 text-xs font-semibold uppercase tracking-wider text-neutral-400">Model Stack</h3>
+      <table class="mb-4 w-full text-xs">
+        <tbody>
+          <tr class="border-b border-neutral-800">
+            <td class="py-1.5 pr-3 text-neutral-500">UNet</td>
+            <td class="py-1.5 font-mono text-neutral-200">anima-preview2.safetensors</td>
+          </tr>
+          <tr class="border-b border-neutral-800">
+            <td class="py-1.5 pr-3 text-neutral-500">Text encoder</td>
+            <td class="py-1.5 font-mono text-neutral-200">qwen_3_06b_base.safetensors <span class="text-neutral-500">(wan)</span></td>
+          </tr>
+          <tr>
+            <td class="py-1.5 pr-3 text-neutral-500">VAE</td>
+            <td class="py-1.5 font-mono text-neutral-200">qwen_image_vae.safetensors</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3 class="mb-2 text-xs font-semibold uppercase tracking-wider text-neutral-400">Sampler Settings</h3>
+      <table class="mb-4 w-full text-xs">
+        <tbody>
+          <tr class="border-b border-neutral-800">
+            <td class="py-1.5 pr-3 text-neutral-500">Sampler</td>
+            <td class="py-1.5 font-mono text-neutral-200">er_sde</td>
+          </tr>
+          <tr class="border-b border-neutral-800">
+            <td class="py-1.5 pr-3 text-neutral-500">Scheduler</td>
+            <td class="py-1.5 font-mono text-neutral-200">sgm_uniform</td>
+          </tr>
+          <tr class="border-b border-neutral-800">
+            <td class="py-1.5 pr-3 text-neutral-500">Steps</td>
+            <td class="py-1.5 font-mono text-neutral-200">30</td>
+          </tr>
+          <tr class="border-b border-neutral-800">
+            <td class="py-1.5 pr-3 text-neutral-500">CFG</td>
+            <td class="py-1.5 font-mono text-neutral-200">4.0</td>
+          </tr>
+          <tr class="border-b border-neutral-800">
+            <td class="py-1.5 pr-3 text-neutral-500">Seed</td>
+            <td class="py-1.5 font-mono text-neutral-200">42 <span class="text-neutral-500">(fixed)</span></td>
+          </tr>
+          <tr>
+            <td class="py-1.5 pr-3 text-neutral-500">Resolution</td>
+            <td class="py-1.5 font-mono text-neutral-200">896 × 1152</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3 class="mb-2 text-xs font-semibold uppercase tracking-wider text-neutral-400">Output</h3>
+      <table class="mb-4 w-full text-xs">
+        <tbody>
+          <tr class="border-b border-neutral-800">
+            <td class="py-1.5 pr-3 text-neutral-500">Format</td>
+            <td class="py-1.5 font-mono text-neutral-200">WEBP</td>
+          </tr>
+          <tr>
+            <td class="py-1.5 pr-3 text-neutral-500">Thumbnail size</td>
+            <td class="py-1.5 font-mono text-neutral-200">540 × 720</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3 class="mb-2 text-xs font-semibold uppercase tracking-wider text-neutral-400">Prompts</h3>
+      <div class="space-y-2 text-xs">
+        <div>
+          <div class="mb-1 text-neutral-500">Positive:</div>
+          <div class="rounded border border-neutral-700 bg-neutral-800 px-3 py-2 font-mono text-neutral-200 leading-relaxed">{`{artist_tag}`}, year 2025, newest, masterpiece, best quality, score_9, score_8, highres, safe, 1girl, hatsune miku, from above, sitting, bench, school, serafuku, fence, long sleeves, outdoors, hamburger, eating, blue sky, plant</div>
+          <div class="mt-1 text-neutral-600">The artist's tag is prepended as the first token.</div>
+        </div>
+        <div>
+          <div class="mb-1 text-neutral-500">Negative:</div>
+          <div class="rounded border border-neutral-700 bg-neutral-800 px-3 py-2 font-mono text-neutral-300 leading-relaxed">worst quality, low quality, score_1, score_2, score_3, blurry, jpeg artifacts, sepia, sensitive, nsfw, explicit</div>
+        </div>
+      </div>
+    </div>
+  </div>
+{/if}
+
+<style>
+  @keyframes card-slide-in {
+    from {
+      opacity: 0;
+      transform: translateX(60px) scale(0.93);
+      filter: blur(3px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0) scale(1);
+      filter: blur(0);
+    }
+  }
+
+  :global(.card-slide) {
+    animation: card-slide-in 0.55s cubic-bezier(0.22, 1.4, 0.64, 1) both;
+  }
+</style>

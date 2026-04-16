@@ -12,6 +12,15 @@
 
   let { entry, onclose, oninsertTag, onprev, onnext }: Props = $props();
 
+  let zoom = $state(1);
+  // Reset zoom when the artist changes
+  $effect(() => { entry.slug; zoom = 1; });
+
+  function cycleZoom(e: MouseEvent) {
+    e.stopPropagation();
+    zoom = zoom === 1 ? 1.5 : 1;
+  }
+
   function displayTag(tag: string): string {
     return tag.replace(/^@/, "").replace(/_/g, " ");
   }
@@ -68,14 +77,25 @@
       </button>
     {/if}
     {#if entry.hasImage && entry.imageUrl}
-      <img
-        src={entry.imageUrl}
-        alt={entry.tag}
-        class="max-h-[80vh] max-w-[92vw] w-auto rounded-lg border border-neutral-800 object-contain shadow-2xl"
-      />
+      <div class="relative">
+        <button
+          type="button"
+          onclick={cycleZoom}
+          style="zoom: {zoom}; transition: zoom 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);"
+          class="block {zoom > 1 ? 'cursor-zoom-out' : 'cursor-zoom-in'} focus:outline-none"
+          aria-label="{zoom > 1 ? 'Zoom out' : 'Zoom in'}"
+          title="{zoom > 1 ? 'Click to zoom out' : 'Click to zoom in'}"
+        >
+          <img
+            src={entry.imageUrl}
+            alt={entry.tag}
+            class="max-h-screen max-w-screen w-auto rounded-lg border border-neutral-800 object-contain shadow-2xl"
+          />
+        </button>
+      </div>
     {:else}
       <div
-        class="flex aspect-3/4 w-[60vh] max-w-[92vw] items-center justify-center rounded-lg border border-neutral-800 bg-neutral-900 text-sm text-neutral-500"
+        class="flex aspect-3/4 w-screen max-h-screen items-center justify-center rounded-lg border border-neutral-800 bg-neutral-900 text-sm text-neutral-500"
       >
         no preview available
       </div>
