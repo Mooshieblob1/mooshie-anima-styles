@@ -79,6 +79,21 @@
   );
   let systemDark = $state(window.matchMedia("(prefers-color-scheme: dark)").matches);
 
+  // ---------------------------------------------------------------------------
+  // Favourites
+  // ---------------------------------------------------------------------------
+  let favourites = $state<Set<string>>(new Set(JSON.parse(localStorage.getItem("favourites") || "[]")));
+  let favouritesFirst = $state(localStorage.getItem("favouritesFirst") !== "false");
+
+  function toggleFavourite(slug: string, e: MouseEvent) {
+    e.stopPropagation();
+    e.preventDefault();
+    const next = new Set(favourites);
+    if (next.has(slug)) next.delete(slug); else next.add(slug);
+    favourites = next;
+    localStorage.setItem("favourites", JSON.stringify([...next]));
+  }
+
   onMount(() => {
     store.init().then(async () => {
       allLoading = true;
@@ -205,19 +220,27 @@
   }
 
   const sortedEntries = $derived.by(() => {
+    let entries: typeof allEntries;
     if (sortField === "uniqueness") {
       const jitter = uniquenessJitter;
-      return [...allEntries]
+      entries = [...allEntries]
         .map((e, i) => ({ e, score: baseUniqueness(e.postCount) * (jitter[i] ?? 1) }))
         .sort((a, b) => b.score - a.score)
         .map((x) => x.e);
+    } else {
+      const dir = sortDir === "asc" ? 1 : -1;
+      entries = [...allEntries].sort((a, b) =>
+        sortField === "name"
+          ? a.slug.localeCompare(b.slug) * dir
+          : (a.postCount - b.postCount) * dir,
+      );
     }
-    const dir = sortDir === "asc" ? 1 : -1;
-    return [...allEntries].sort((a, b) =>
-      sortField === "name"
-        ? a.slug.localeCompare(b.slug) * dir
-        : (a.postCount - b.postCount) * dir,
-    );
+    if (favouritesFirst && favourites.size > 0) {
+      const favs = entries.filter(e => favourites.has(e.slug));
+      const rest = entries.filter(e => !favourites.has(e.slug));
+      return [...favs, ...rest];
+    }
+    return entries;
   });
 
   const totalPages = $derived(Math.max(1, Math.ceil(sortedEntries.length / pageSize)));
@@ -267,6 +290,7 @@
   $effect(() => {
     localStorage.setItem("theme", theme);
     localStorage.setItem("cardSliderVal", String(cardSliderVal));
+    localStorage.setItem("favouritesFirst", String(favouritesFirst));
     const isLight = theme === "light" || (theme === "auto" && !systemDark);
     document.documentElement.classList.toggle("light", isLight);
   });
@@ -373,6 +397,10 @@
           <span class="text-xs text-neutral-500">Size:</span>
           <input type="range" min="0" max="100" step="1" bind:value={cardSliderVal} class="w-20 accent-indigo-500" />
         </div>
+        <label class="flex cursor-pointer items-center gap-1.5 rounded-lg border border-neutral-800 bg-neutral-900/50 px-2 py-1 text-xs text-neutral-400 transition-colors hover:text-neutral-200 {favouritesFirst ? 'border-pink-600/60 text-pink-400' : ''}">
+          <input type="checkbox" bind:checked={favouritesFirst} class="accent-pink-500" />
+          <span>&#10084; Favourites first</span>
+        </label>
         <div class="flex items-center gap-0.5 rounded-lg border border-neutral-800 bg-neutral-900/50 p-1">
           <span class="px-1.5 text-xs text-neutral-500">Sort:</span>
           <button
@@ -481,10 +509,12 @@
         {#each pageEntries as hit, i (hit.slug)}
           {@const url = thumbUrl(hit)}
           {@const rank = (safePage - 1) * pageSize + i + 1}
-          <button
-            type="button"
-            class="group flex flex-col items-stretch overflow-hidden rounded-lg border bg-neutral-900 text-left transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 {copiedSlug === hit.slug ? 'border-emerald-500' : 'border-neutral-800 hover:border-indigo-500'}"
+          <div
+            role="button"
+            tabindex="0"
+            class="group flex flex-col items-stretch overflow-hidden rounded-lg border bg-neutral-900 text-left transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-500 {copiedSlug === hit.slug ? 'border-emerald-500' : favourites.has(hit.slug) ? 'border-pink-700 hover:border-pink-500' : 'border-neutral-800 hover:border-indigo-500'}"
             onclick={() => openHit(hit.slug, i)}
+            onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openHit(hit.slug, i); } }}
             oncontextmenu={(e) => { e.preventDefault(); void copyTag(hit.tag, hit.slug); }}
             title="{hit.tag} · Right-click to copy tag"
           >
@@ -507,6 +537,13 @@
                   #{rank}
                 </div>
               {/if}
+              <button
+                type="button"
+                onclick={(e) => toggleFavourite(hit.slug, e)}
+                class="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-neutral-900/70 text-sm leading-none transition-colors hover:bg-neutral-900 {favourites.has(hit.slug) ? 'text-pink-500' : 'text-neutral-500 hover:text-pink-400'}"
+                aria-label="{favourites.has(hit.slug) ? 'Unfavourite' : 'Favourite'} {hit.tag}"
+                title="{favourites.has(hit.slug) ? 'Unfavourite' : 'Favourite'}"
+              >&#10084;</button>
               {#if copiedSlug === hit.slug}
                 <div class="absolute inset-0 flex items-center justify-center bg-neutral-900/80">
                   <span class="rounded bg-emerald-600 px-2 py-1 text-xs font-semibold text-white">Copied!</span>
@@ -517,7 +554,7 @@
               <span class="truncate text-sm text-red-400">{displayTag(hit.tag)}</span>
               <span class="shrink-0 text-xs text-neutral-500">{formatCount(hit.postCount)}</span>
             </div>
-          </button>
+          </div>
         {/each}
       </div>
 
