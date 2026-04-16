@@ -13,8 +13,6 @@
   let { entry, onclose, oninsertTag, onprev, onnext }: Props = $props();
 
   let zoom = $state(1);
-  // Reset zoom when the artist changes
-  $effect(() => { entry.slug; zoom = 1; });
 
   function cycleZoom(e: MouseEvent) {
     e.stopPropagation();

@@ -83,17 +83,23 @@
   // ---------------------------------------------------------------------------
   // Favourites
   // ---------------------------------------------------------------------------
-  let favourites = $state<Set<string>>(new Set(JSON.parse(localStorage.getItem("favourites") || "[]")));
+  let favouritesList = $state<string[]>(JSON.parse(localStorage.getItem("favourites") || "[]"));
+  const favourites = $derived(new Set(favouritesList));
   let showFavouritesOnly = $state(false);
   let cardAnimKey = $state(0);
+
+  $effect(() => {
+    localStorage.setItem("favourites", JSON.stringify(favouritesList));
+  });
 
   function toggleFavourite(slug: string, e: MouseEvent) {
     e.stopPropagation();
     e.preventDefault();
-    const next = new Set(favourites);
-    if (next.has(slug)) next.delete(slug); else next.add(slug);
-    favourites = next;
-    localStorage.setItem("favourites", JSON.stringify([...next]));
+    if (favourites.has(slug)) {
+      favouritesList = favouritesList.filter(s => s !== slug);
+    } else {
+      favouritesList = [...favouritesList, slug];
+    }
   }
 
   onMount(() => {
@@ -487,7 +493,7 @@
     {/if}
   </header>
 
-  <div class="flex-1 overflow-y-auto" bind:this={scrollContainer}>
+  <div class="flex-1 overflow-y-auto overflow-x-hidden" bind:this={scrollContainer}>
     {#if allError}
       <div class="p-8 text-center text-sm text-red-400">
         Failed to load artists: {allError}
