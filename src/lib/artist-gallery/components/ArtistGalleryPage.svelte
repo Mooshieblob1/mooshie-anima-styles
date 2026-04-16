@@ -135,12 +135,23 @@
   }
 
   async function openHit(slug: string, index = -1) {
-    await store.openArtist(slug);
-    active = store.activeArtist;
-    activeIndex = index;
+    // Open the modal immediately with data already in the search index,
+    // so the image and tag are visible without waiting for the shard fetch.
+    const hit = allEntries.find(e => e.slug === slug);
+    if (hit && store.manifest) {
+      const imageUrl = hit.hasImage && hit.imageId
+        ? `${store.manifest.imageBaseUrl}/${store.manifest.releasePrefix}/images/${hit.imageId}.webp`
+        : "";
+      active = { tag: hit.tag, slug: hit.slug, imageId: hit.imageId, imageUrl, objectKey: "", postCount: hit.postCount, aliases: [], hasImage: hit.hasImage };
+      activeIndex = index;
+    }
     showSuggestions = false;
     queryInput = "";
     void store.setQuery("");
+    // Fetch full entry (for aliases) in background and update when ready.
+    store.openArtist(slug).then(() => {
+      if (store.activeArtist && active?.slug === slug) active = store.activeArtist;
+    });
   }
 
   async function navigateTo(index: number) {
@@ -399,7 +410,7 @@
         </div>
         <label class="flex cursor-pointer items-center gap-1.5 rounded-lg border border-neutral-800 bg-neutral-900/50 px-2 py-1 text-xs text-neutral-400 transition-colors hover:text-neutral-200 {favouritesFirst ? 'border-pink-600/60 text-pink-400' : ''}">
           <input type="checkbox" bind:checked={favouritesFirst} class="accent-pink-500" />
-          <span>&#10084; Favourites first</span>
+          <span>♥ Favourites first</span>
         </label>
         <div class="flex items-center gap-0.5 rounded-lg border border-neutral-800 bg-neutral-900/50 p-1">
           <span class="px-1.5 text-xs text-neutral-500">Sort:</span>
@@ -543,7 +554,7 @@
                 class="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-neutral-900/70 text-sm leading-none transition-colors hover:bg-neutral-900 {favourites.has(hit.slug) ? 'text-pink-500' : 'text-neutral-500 hover:text-pink-400'}"
                 aria-label="{favourites.has(hit.slug) ? 'Unfavourite' : 'Favourite'} {hit.tag}"
                 title="{favourites.has(hit.slug) ? 'Unfavourite' : 'Favourite'}"
-              >&#10084;</button>
+              >{favourites.has(hit.slug) ? '♥' : '♡'}</button>
               {#if copiedSlug === hit.slug}
                 <div class="absolute inset-0 flex items-center justify-center bg-neutral-900/80">
                   <span class="rounded bg-emerald-600 px-2 py-1 text-xs font-semibold text-white">Copied!</span>
