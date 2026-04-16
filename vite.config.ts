@@ -4,5 +4,4 @@ import tailwindcss from "@tailwindcss/vite";
 
 export default defineConfig({
   plugins: [svelte(), tailwindcss()],
-  base: "/mooshie-anima-styles/",
 });
