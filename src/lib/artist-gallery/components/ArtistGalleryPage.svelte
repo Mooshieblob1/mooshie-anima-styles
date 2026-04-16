@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import Lenis from "lenis";
   import { createArtistGalleryStore } from "../store.svelte.js";
   import type { ArtistEntry, ArtistSearchHit } from "../types.js";
   import ArtistLightbox from "./ArtistLightbox.svelte";
@@ -48,8 +49,7 @@
     cardAnimKey++;
     currentPage = 1;
     requestAnimationFrame(() => {
-      scrollContainer?.scrollTo({ top: 0, behavior: "instant" });
-      scrollContainer?.dispatchEvent(new Event("scroll"));
+      scrollToTop();
     });
   }
 
@@ -65,9 +65,16 @@
 
   let active = $state<ArtistEntry | null>(null);
   let activeIndex = $state(-1);
+  let lightboxZoom = $state(1);
+  let lightboxOrigin = $state<{ x: number; y: number } | null>(null);
+
+  function cardCenter(el: HTMLElement): { x: number; y: number } {
+    const r = el.getBoundingClientRect();
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+  }
   let queryInput = $state("");
   let searchDebounce: number | null = null;
-  let showSuggestions = $state(false);
+  let pageJumpInput = $state("");
 
   type Theme = "light" | "dark" | "auto";
   let theme = $state<Theme>((localStorage.getItem("theme") as Theme) ?? "auto");
@@ -124,22 +131,39 @@
     return () => mq.removeEventListener("change", handler);
   });
 
+  onMount(() => {
+    // Wait a tick for scrollContainer to be bound
+    requestAnimationFrame(() => {
+      if (!scrollContainer) return;
+      lenis = new Lenis({
+        wrapper: scrollContainer,
+        content: scrollContainer,
+        lerp: 0.1,
+        smoothWheel: true,
+      });
+      function raf(time: number) {
+        lenis!.raf(time);
+        requestAnimationFrame(raf);
+      }
+      requestAnimationFrame(raf);
+    });
+    return () => { lenis?.destroy(); lenis = null; };
+  });
+
   function onSearchInput(value: string) {
     queryInput = value;
-    showSuggestions = true;
-    if (searchDebounce !== null) window.clearTimeout(searchDebounce);
-    searchDebounce = window.setTimeout(() => {
-      void store.setQuery(value);
-      searchDebounce = null;
-    }, 120);
+    currentPage = 1;
+    cardAnimKey++;
   }
 
-  function onInputFocus() {
-    if (queryInput.trim()) showSuggestions = true;
+  function goToRandomPage() {
+    goToPage(Math.floor(Math.random() * totalPages) + 1);
   }
 
-  function onInputBlur() {
-    window.setTimeout(() => { showSuggestions = false; }, 150);
+  function submitPageJump() {
+    const n = parseInt(pageJumpInput, 10);
+    if (!isNaN(n)) goToPage(Math.max(1, Math.min(n, totalPages)));
+    pageJumpInput = "";
   }
 
   async function openHit(slug: string, index = -1) {
@@ -153,9 +177,6 @@
       active = { tag: hit.tag, slug: hit.slug, imageId: hit.imageId, imageUrl, objectKey: "", postCount: hit.postCount, aliases: [], hasImage: hit.hasImage };
       activeIndex = index;
     }
-    showSuggestions = false;
-    queryInput = "";
-    void store.setQuery("");
     // Fetch full entry (for aliases) in background and update when ready.
     store.openArtist(slug).then(() => {
       if (store.activeArtist && active?.slug === slug) active = store.activeArtist;
@@ -198,12 +219,21 @@
   }
 
   let scrollContainer = $state<HTMLDivElement | null>(null);
+  let lenis: Lenis | null = null;
+
+  function scrollToTop() {
+    if (lenis) {
+      lenis.scrollTo(0, { immediate: true });
+    } else {
+      scrollContainer?.scrollTo({ top: 0, behavior: "instant" });
+    }
+    scrollContainer?.dispatchEvent(new Event("scroll"));
+  }
 
   function goToPage(page: number) {
     currentPage = page;
     requestAnimationFrame(() => {
-      scrollContainer?.scrollTo({ top: 0, behavior: "instant" });
-      scrollContainer?.dispatchEvent(new Event("scroll"));
+      scrollToTop();
     });
   }
 
@@ -216,8 +246,7 @@
     cardAnimKey++;
     currentPage = 1;
     requestAnimationFrame(() => {
-      scrollContainer?.scrollTo({ top: 0, behavior: "instant" });
-      scrollContainer?.dispatchEvent(new Event("scroll"));
+      scrollToTop();
     });
   }
 
@@ -226,8 +255,7 @@
     cardAnimKey++;
     currentPage = 1;
     requestAnimationFrame(() => {
-      scrollContainer?.scrollTo({ top: 0, behavior: "instant" });
-      scrollContainer?.dispatchEvent(new Event("scroll"));
+      scrollToTop();
     });
   }
 
@@ -254,6 +282,12 @@
         sortField === "name"
           ? a.slug.localeCompare(b.slug) * dir
           : (a.postCount - b.postCount) * dir,
+      );
+    }
+    const q = queryInput.trim().toLowerCase();
+    if (q) {
+      entries = entries.filter(e =>
+        e.slug.includes(q) || e.tag.toLowerCase().replace(/_/g, " ").includes(q)
       );
     }
     if (showFavouritesOnly) {
@@ -362,51 +396,17 @@
         </p>
       </div>
 
-      <!-- Search with suggestions -->
+      <!-- Search -->
       <div class="relative w-full max-w-sm">
         <input
           type="search"
           placeholder="Search artist tag…"
           value={queryInput}
           oninput={(e) => onSearchInput(e.currentTarget.value)}
-          onfocus={onInputFocus}
-          onblur={onInputBlur}
           class="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-neutral-100 placeholder-neutral-500 focus:border-indigo-500 focus:outline-none"
         />
-        {#if store.searchLoading}
-          <span class="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-neutral-500">…</span>
-        {/if}
-
-        {#if showSuggestions && queryInput.trim() && store.results.length > 0}
-          <ul class="absolute left-0 right-0 top-full z-50 mt-1 max-h-72 overflow-y-auto rounded-lg border border-neutral-700 bg-neutral-900 shadow-lg">
-            {#each store.results as hit (hit.slug)}
-              <li>
-                <button
-                  type="button"
-                  onmousedown={(e) => e.preventDefault()}
-                  onclick={() => openHit(hit.slug, -1)}
-                  class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-neutral-800"
-                >
-                  {#if thumbUrl(hit)}
-                    <img
-                      src={thumbUrl(hit)}
-                      alt={hit.tag}
-                      loading="lazy"
-                      class="h-8 w-6 shrink-0 rounded object-cover"
-                    />
-                  {:else}
-                    <div class="h-8 w-6 shrink-0 rounded bg-neutral-700"></div>
-                  {/if}
-                  <span class="flex-1 truncate text-neutral-100">{displayTag(hit.tag)}</span>
-                  <span class="shrink-0 text-xs text-neutral-500">{formatCount(hit.postCount)}</span>
-                </button>
-              </li>
-            {/each}
-          </ul>
-        {:else if showSuggestions && queryInput.trim() && !store.searchLoading && store.results.length === 0}
-          <div class="absolute left-0 right-0 top-full z-50 mt-1 rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm text-neutral-500 shadow-lg">
-            No matches for "{queryInput}"
-          </div>
+        {#if queryInput.trim() && sortedEntries.length === 0 && !allLoading}
+          <span class="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-neutral-500">no results</span>
         {/if}
       </div>
     </div>
@@ -503,7 +503,7 @@
     {:else}
       <p class="pt-3 text-center text-xs text-neutral-500">Right click a card to copy a tag</p>
       {#if totalPages > 1}
-        <div class="flex items-center justify-center gap-3 border-b border-neutral-800/60 px-4 py-2">
+        <div class="flex flex-wrap items-center justify-center gap-2 border-b border-neutral-800/60 px-4 py-2">
           <button
             type="button"
             class="rounded-md border border-neutral-700 bg-neutral-800 px-3 py-1 text-sm text-neutral-300 transition-colors hover:border-indigo-500 disabled:cursor-not-allowed disabled:opacity-40"
@@ -525,6 +525,25 @@
           >
             Next →
           </button>
+          <button
+            type="button"
+            class="rounded-md border border-neutral-700 bg-neutral-800 px-3 py-1 text-sm text-neutral-300 transition-colors hover:border-amber-500"
+            onclick={goToRandomPage}
+            title="Go to a random page"
+          >
+            ⚄ Random
+          </button>
+          <form onsubmit={(e) => { e.preventDefault(); submitPageJump(); }} class="flex items-center gap-1">
+            <input
+              type="number"
+              min="1"
+              max={totalPages}
+              placeholder="page #"
+              bind:value={pageJumpInput}
+              class="w-16 rounded-md border border-neutral-700 bg-neutral-800 px-2 py-1 text-center text-sm text-neutral-100 placeholder-neutral-600 focus:border-indigo-500 focus:outline-none"
+            />
+            <button type="submit" class="rounded-md border border-neutral-700 bg-neutral-800 px-2 py-1 text-sm text-neutral-300 transition-colors hover:border-indigo-500">Go</button>
+          </form>
         </div>
       {/if}
       {#key cardAnimKey}
@@ -537,8 +556,8 @@
             tabindex="0"
             style="animation-delay: {Math.min(i * 30, 450)}ms"
             class="card-slide group flex flex-col items-stretch overflow-hidden rounded-lg border bg-neutral-900 text-left transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-500 {copiedSlug === hit.slug ? 'border-emerald-500' : favourites.has(hit.slug) ? 'border-pink-700 hover:border-pink-500' : 'border-neutral-800 hover:border-indigo-500'}"
-            onclick={() => openHit(hit.slug, i)}
-            onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openHit(hit.slug, i); } }}
+            onclick={(e) => { lightboxOrigin = cardCenter(e.currentTarget as HTMLElement); openHit(hit.slug, i); }}
+            onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); lightboxOrigin = null; openHit(hit.slug, i); } }}
             oncontextmenu={(e) => { e.preventDefault(); void copyTag(hit.tag, hit.slug); }}
             title="{hit.tag} · Right-click to copy tag"
           >
@@ -568,11 +587,19 @@
                 aria-label="{favourites.has(hit.slug) ? 'Unfavourite' : 'Favourite'} {hit.tag}"
                 title="{favourites.has(hit.slug) ? 'Unfavourite' : 'Favourite'}"
               >{favourites.has(hit.slug) ? '♥' : '♡'}</button>
-              {#if copiedSlug === hit.slug}
-                <div class="absolute inset-0 flex items-center justify-center bg-neutral-900/80">
-                  <span class="rounded bg-emerald-600 px-2 py-1 text-xs font-semibold text-white">Copied!</span>
-                </div>
-              {/if}
+              <button
+                type="button"
+                onclick={(e) => { e.stopPropagation(); void copyTag(hit.tag, hit.slug); }}
+                class="absolute right-1 bottom-1 flex h-6 w-6 items-center justify-center rounded-full bg-neutral-900/70 text-neutral-500 leading-none opacity-0 transition-opacity group-hover:opacity-100 hover:bg-neutral-900 hover:text-neutral-200"
+                aria-label="Copy tag {hit.tag}"
+                title="Copy tag"
+              >
+                {#if copiedSlug === hit.slug}
+                  <svg viewBox="0 0 16 16" width="11" height="11" fill="currentColor" class="text-emerald-400"><path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 0 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0z"/></svg>
+                {:else}
+                  <svg viewBox="0 0 16 16" width="11" height="11" fill="currentColor"><path d="M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 0 1 0 1.5h-1.5a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-1.5a.75.75 0 0 1 1.5 0v1.5A1.75 1.75 0 0 1 9.25 16h-7.5A1.75 1.75 0 0 1 0 14.25Z"/><path d="M5 1.75C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0 1 14.25 11h-7.5A1.75 1.75 0 0 1 5 9.25Zm1.75-.25a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-7.5a.25.25 0 0 0-.25-.25Z"/></svg>
+                {/if}
+              </button>
             </div>
             <div class="flex items-center justify-between gap-2 px-2 py-1.5">
               <span class="truncate text-sm text-red-400">{displayTag(hit.tag)}</span>
@@ -585,7 +612,7 @@
 
       <!-- Pagination -->
       {#if totalPages > 1}
-        <div class="flex items-center justify-center gap-3 px-4 py-4">
+        <div class="flex flex-wrap items-center justify-center gap-2 px-4 py-4">
           <button
             type="button"
             class="rounded-md border border-neutral-700 bg-neutral-800 px-3 py-1.5 text-sm text-neutral-300 transition-colors hover:border-indigo-500 disabled:cursor-not-allowed disabled:opacity-40"
@@ -607,6 +634,25 @@
           >
             Next →
           </button>
+          <button
+            type="button"
+            class="rounded-md border border-neutral-700 bg-neutral-800 px-3 py-1.5 text-sm text-neutral-300 transition-colors hover:border-amber-500"
+            onclick={goToRandomPage}
+            title="Go to a random page"
+          >
+            ⚄ Random
+          </button>
+          <form onsubmit={(e) => { e.preventDefault(); submitPageJump(); }} class="flex items-center gap-1">
+            <input
+              type="number"
+              min="1"
+              max={totalPages}
+              placeholder="page #"
+              bind:value={pageJumpInput}
+              class="w-16 rounded-md border border-neutral-700 bg-neutral-800 px-2 py-1 text-center text-sm text-neutral-100 placeholder-neutral-600 focus:border-indigo-500 focus:outline-none"
+            />
+            <button type="submit" class="rounded-md border border-neutral-700 bg-neutral-800 px-2 py-1 text-sm text-neutral-300 transition-colors hover:border-indigo-500">Go</button>
+          </form>
         </div>
       {/if}
     {/if}
@@ -644,6 +690,8 @@
     entry={active}
     onclose={closeLightbox}
     {oninsertTag}
+    bind:zoom={lightboxZoom}
+    origin={lightboxOrigin}
     onprev={activeIndex > 0 ? () => navigateTo(activeIndex - 1) : undefined}
     onnext={activeIndex >= 0 && activeIndex < pageEntries.length - 1 ? () => navigateTo(activeIndex + 1) : undefined}
   />

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { fade } from "svelte/transition";
   import type { ArtistEntry } from "../types.js";
 
   interface Props {
@@ -8,11 +9,37 @@
     oninsertTag?: (tag: string) => void;
     onprev?: () => void;
     onnext?: () => void;
+    zoom?: number;
+    origin?: { x: number; y: number } | null;
   }
 
-  let { entry, onclose, oninsertTag, onprev, onnext }: Props = $props();
+  let { entry, onclose, oninsertTag, onprev, onnext, zoom = $bindable(1), origin = null }: Props = $props();
 
-  let zoom = $state(1);
+  type Pt = { x: number; y: number } | null | undefined;
+
+  function fromCard(node: Element, { origin: o }: { origin: Pt }) {
+    const rect = node.getBoundingClientRect();
+    const ox = o ? o.x - rect.left : rect.width / 2;
+    const oy = o ? o.y - rect.top : rect.height / 2;
+    return {
+      duration: 450,
+      css: (t: number) => {
+        const c4 = (2 * Math.PI) / 3;
+        const s = t === 0 ? 0 : t === 1 ? 1 : Math.pow(2, -10 * t) * Math.sin((t * 10 - 0.75) * c4) + 1;
+        return `transform-origin: ${ox}px ${oy}px; transform: scale(${s}); opacity: ${Math.min(1, t * 4)};`;
+      }
+    };
+  }
+
+  function toCard(node: Element, { origin: o }: { origin: Pt }) {
+    const rect = node.getBoundingClientRect();
+    const ox = o ? o.x - rect.left : rect.width / 2;
+    const oy = o ? o.y - rect.top : rect.height / 2;
+    return {
+      duration: 220,
+      css: (t: number) => `transform-origin: ${ox}px ${oy}px; transform: scale(${t * t}); opacity: ${t};`
+    };
+  }
 
   function cycleZoom(e: MouseEvent) {
     e.stopPropagation();
@@ -41,6 +68,7 @@
 <svelte:window onkeydown={onBackdropKey} />
 
 <div
+  transition:fade={{ duration: 200 }}
   class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm"
   role="dialog"
   aria-modal="true"
@@ -53,7 +81,10 @@
     onclick={onclose}
   ></button>
 
-  <div class="relative z-10 flex max-h-[92vh] flex-col items-center gap-3 p-4">
+  <div
+    in:fromCard={{ origin }}
+    out:toCard={{ origin }}
+    class="relative z-10 flex max-h-[92vh] flex-col items-center gap-3 p-4">
     {#if onprev}
       <button
         type="button"
