@@ -399,13 +399,22 @@
   const _preloadUrls = $derived.by(() => {
     if (!store.manifest) return [] as string[];
     const { imageBaseUrl, releasePrefix } = store.manifest;
-    const start = Math.max(1, safePage - 4);
-    const end = Math.min(totalPages, safePage + 1);
     const urls: string[] = [];
-    for (let p = start; p <= end; p++) {
-      for (const hit of sortedEntries.slice((p - 1) * pageSize, p * pageSize)) {
-        if (hit.hasImage && hit.imageId) {
+    if (infiniteScroll) {
+      // Preload visible entries + one batch ahead so images are in cache before they scroll in
+      const lookahead = Math.min(infiniteCount + pageSize, sortedEntries.length);
+      for (let i = 0; i < lookahead; i++) {
+        const hit = sortedEntries[i];
+        if (hit?.hasImage && hit.imageId)
           urls.push(`${imageBaseUrl}/${releasePrefix}/images/${hit.imageId}.webp`);
+      }
+    } else {
+      const start = Math.max(1, safePage - 4);
+      const end = Math.min(totalPages, safePage + 1);
+      for (let p = start; p <= end; p++) {
+        for (const hit of sortedEntries.slice((p - 1) * pageSize, p * pageSize)) {
+          if (hit.hasImage && hit.imageId)
+            urls.push(`${imageBaseUrl}/${releasePrefix}/images/${hit.imageId}.webp`);
         }
       }
     }
@@ -697,8 +706,8 @@
                 <img
                   src={url}
                   alt={hit.tag}
-                  loading="eager"
-                  decoding="auto"
+                  loading="lazy"
+                  decoding="async"
                   class="h-full w-full object-cover"
                 />
               {:else}
