@@ -74,29 +74,30 @@
     onclick={onclose}
   ></button>
 
+  {#if onprev}
+    <button
+      type="button"
+      onclick={onprev}
+      class="absolute left-3 top-1/2 z-20 -translate-y-1/2 flex h-10 w-10 items-center justify-center rounded-full border border-neutral-700 bg-neutral-900/90 text-neutral-200 transition-colors hover:border-indigo-500 hover:text-white focus:outline-none"
+      aria-label="Previous artist"
+    >
+      ←
+    </button>
+  {/if}
+  {#if onnext}
+    <button
+      type="button"
+      onclick={onnext}
+      class="absolute right-3 top-1/2 z-20 -translate-y-1/2 flex h-10 w-10 items-center justify-center rounded-full border border-neutral-700 bg-neutral-900/90 text-neutral-200 transition-colors hover:border-indigo-500 hover:text-white focus:outline-none"
+      aria-label="Next artist"
+    >
+      →
+    </button>
+  {/if}
+
   <div
     transition:fade={{ duration: 150 }}
     class="relative z-10 flex w-auto max-w-[92vw] max-h-[92vh] flex-col items-center gap-3 p-4">
-    {#if onprev}
-      <button
-        type="button"
-        onclick={onprev}
-        class="absolute -left-12 top-1/2 -translate-y-1/2 flex h-10 w-10 items-center justify-center rounded-full border border-neutral-700 bg-neutral-900/90 text-neutral-200 transition-colors hover:border-indigo-500 hover:text-white focus:outline-none"
-        aria-label="Previous artist"
-      >
-        ←
-      </button>
-    {/if}
-    {#if onnext}
-      <button
-        type="button"
-        onclick={onnext}
-        class="absolute -right-12 top-1/2 -translate-y-1/2 flex h-10 w-10 items-center justify-center rounded-full border border-neutral-700 bg-neutral-900/90 text-neutral-200 transition-colors hover:border-indigo-500 hover:text-white focus:outline-none"
-        aria-label="Next artist"
-      >
-        →
-      </button>
-    {/if}
     {#if entry.hasImage && entry.imageUrl}
       <div class="relative flex min-h-0 flex-1 items-center justify-center">
         <button
