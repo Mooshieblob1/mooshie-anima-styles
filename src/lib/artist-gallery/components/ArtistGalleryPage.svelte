@@ -97,9 +97,112 @@
     e.preventDefault();
     if (favourites.has(slug)) {
       favouritesList = favouritesList.filter(s => s !== slug);
+      // also remove from all categories
+      categories = categories.map(c => ({ ...c, slugs: c.slugs.filter(s => s !== slug) }));
     } else {
       favouritesList = [...favouritesList, slug];
     }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Favourite categories
+  // ---------------------------------------------------------------------------
+  type FavCategory = { id: string; name: string; color: string; slugs: string[] };
+
+  const PRESET_COLORS = ["#818cf8","#f472b6","#34d399","#fbbf24","#60a5fa","#f87171","#a78bfa","#2dd4bf"];
+  let categories = $state<FavCategory[]>(JSON.parse(localStorage.getItem("favCategories") || "[]"));
+  let activeCategoryId = $state<string | null>(null);
+  let showCategoryManager = $state(false);
+  let catMenuSlug = $state<string | null>(null);
+  let catMenuPos = $state({ top: 0, left: 0 });
+  let newCatName = $state("");
+  let newCatColor = $state(PRESET_COLORS[0]);
+  let importInput = $state<HTMLInputElement | null>(null);
+
+  $effect(() => { localStorage.setItem("favCategories", JSON.stringify(categories)); });
+
+  function createCategory(name: string, color: string) {
+    if (!name.trim()) return;
+    categories = [...categories, { id: crypto.randomUUID(), name: name.trim(), color, slugs: [] }];
+    newCatName = "";
+  }
+
+  function deleteCategory(id: string) {
+    categories = categories.filter(c => c.id !== id);
+    if (activeCategoryId === id) activeCategoryId = null;
+  }
+
+  function renameCategory(id: string, name: string) {
+    if (name.trim()) categories = categories.map(c => c.id === id ? { ...c, name: name.trim() } : c);
+  }
+
+  function recolorCategory(id: string, color: string) {
+    categories = categories.map(c => c.id === id ? { ...c, color } : c);
+  }
+
+  function toggleSlugInCategory(categoryId: string, slug: string) {
+    categories = categories.map(c => {
+      if (c.id !== categoryId) return c;
+      return c.slugs.includes(slug)
+        ? { ...c, slugs: c.slugs.filter(s => s !== slug) }
+        : { ...c, slugs: [...c.slugs, slug] };
+    });
+  }
+
+  function slugCategories(slug: string): FavCategory[] {
+    return categories.filter(c => c.slugs.includes(slug));
+  }
+
+  function cardBorderInfo(slug: string): { cls: string; style: string } {
+    if (copiedSlug === slug) return { cls: "border-emerald-500", style: "" };
+    const cats = slugCategories(slug);
+    if (cats.length > 0) return { cls: "", style: `border-color: ${cats[0].color};` };
+    if (favourites.has(slug)) return { cls: "border-pink-700 hover:border-pink-500", style: "" };
+    return { cls: "border-neutral-800 hover:border-indigo-500", style: "" };
+  }
+
+  function openCatMenu(slug: string, e: MouseEvent) {
+    e.stopPropagation();
+    if (catMenuSlug === slug) { catMenuSlug = null; return; }
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    catMenuPos = { top: rect.bottom + 4, left: rect.left };
+    catMenuSlug = slug;
+  }
+
+  function closeCatMenu() { catMenuSlug = null; }
+
+  function exportFavourites() {
+    const data = JSON.stringify({ version: 1, favourites: favouritesList, categories }, null, 2);
+    const blob = new Blob([data], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "anima-favourites.json";
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function onImportFile(e: Event) {
+    const file = (e.target as HTMLInputElement).files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const raw = JSON.parse(ev.target?.result as string);
+        if (Array.isArray(raw.favourites))
+          favouritesList = raw.favourites.filter((s: unknown) => typeof s === "string");
+        if (Array.isArray(raw.categories))
+          categories = (raw.categories as unknown[]).filter((c): c is FavCategory =>
+            typeof c === "object" && c !== null &&
+            typeof (c as FavCategory).id === "string" &&
+            typeof (c as FavCategory).name === "string" &&
+            typeof (c as FavCategory).color === "string" &&
+            Array.isArray((c as FavCategory).slugs)
+          );
+      } catch { /* invalid JSON */ }
+      (e.target as HTMLInputElement).value = "";
+    };
+    reader.readAsText(file);
   }
 
   onMount(() => {
@@ -261,6 +364,10 @@
         e.slug.includes(q) || e.tag.toLowerCase().replace(/_/g, " ").includes(q)
       );
     }
+    if (activeCategoryId) {
+      const catSlugs = new Set(categories.find(c => c.id === activeCategoryId)?.slugs ?? []);
+      return entries.filter(e => catSlugs.has(e.slug));
+    }
     if (showFavouritesOnly) {
       return entries.filter(e => favourites.has(e.slug));
     }
@@ -320,6 +427,8 @@
     document.documentElement.classList.toggle("light", isLight);
   });
 </script>
+
+<svelte:document onclick={closeCatMenu} />
 
 <div class="flex h-full w-full flex-col overflow-hidden bg-neutral-950 text-neutral-100">
   <header class="relative flex-none border-b border-neutral-800 bg-neutral-900/60 px-4 py-3">
@@ -391,9 +500,26 @@
         </div>
         <button
           type="button"
-          onclick={() => { showFavouritesOnly = !showFavouritesOnly; cardAnimKey++; }}
+          onclick={() => { showFavouritesOnly = !showFavouritesOnly; activeCategoryId = null; cardAnimKey++; }}
           class="flex items-center gap-1.5 rounded-lg border bg-neutral-900/50 px-2 py-1 text-xs transition-colors {showFavouritesOnly ? 'border-pink-600/60 text-pink-400 hover:text-pink-300' : 'border-neutral-800 text-neutral-400 hover:text-neutral-200'}"
         >♥ Favourites{#if favourites.size > 0} ({favourites.size}){/if}</button>
+        {#each categories as cat (cat.id)}
+          <button
+            type="button"
+            onclick={() => { activeCategoryId = activeCategoryId === cat.id ? null : cat.id; showFavouritesOnly = false; cardAnimKey++; }}
+            style="{activeCategoryId === cat.id ? `border-color: ${cat.color}; background-color: ${cat.color}18;` : ''}"
+            class="flex items-center gap-1.5 rounded-lg border bg-neutral-900/50 px-2 py-1 text-xs transition-colors {activeCategoryId === cat.id ? 'text-white' : 'border-neutral-800 text-neutral-400 hover:text-neutral-200'}"
+          >
+            <span class="inline-block h-2 w-2 shrink-0 rounded-full" style="background-color: {cat.color};"></span>
+            {cat.name}{#if cat.slugs.length > 0}<span class="{activeCategoryId === cat.id ? 'text-white/60' : 'text-neutral-500'}"> ({cat.slugs.length})</span>{/if}
+          </button>
+        {/each}
+        <button
+          type="button"
+          onclick={() => showCategoryManager = true}
+          class="flex items-center gap-1 rounded-lg border border-neutral-800 bg-neutral-900/50 px-2 py-1 text-xs text-neutral-400 transition-colors hover:text-neutral-200"
+          title="Manage categories & export/import"
+        >⊞ Categories</button>
         <div class="flex items-center gap-0.5 rounded-lg border border-neutral-800 bg-neutral-900/50 p-1">
           <span class="px-1.5 text-xs text-neutral-500">Sort:</span>
           <button
@@ -522,11 +648,13 @@
         {#each pageEntries as hit, i (hit.slug)}
           {@const url = thumbUrl(hit)}
           {@const rank = (safePage - 1) * pageSize + i + 1}
+          {@const border = cardBorderInfo(hit.slug)}
+          {@const catDots = slugCategories(hit.slug)}
           <div
             role="button"
             tabindex="0"
-            style="animation-delay: {Math.min(i * 30, 450)}ms"
-            class="card-slide group flex flex-col items-stretch overflow-hidden rounded-lg border bg-neutral-900 text-left transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-500 {copiedSlug === hit.slug ? 'border-emerald-500' : favourites.has(hit.slug) ? 'border-pink-700 hover:border-pink-500' : 'border-neutral-800 hover:border-indigo-500'}"
+            style="{border.style}animation-delay: {Math.min(i * 30, 450)}ms"
+            class="card-slide group flex flex-col items-stretch overflow-hidden rounded-lg border bg-neutral-900 text-left transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-500 {border.cls}"
             onclick={() => openHit(hit.slug, i)}
             onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openHit(hit.slug, i); } }}
             oncontextmenu={(e) => { e.preventDefault(); void copyTag(hit.tag, hit.slug); }}
@@ -558,6 +686,24 @@
                 aria-label="{favourites.has(hit.slug) ? 'Unfavourite' : 'Favourite'} {hit.tag}"
                 title="{favourites.has(hit.slug) ? 'Unfavourite' : 'Favourite'}"
               >{favourites.has(hit.slug) ? '♥' : '♡'}</button>
+              {#if favourites.has(hit.slug)}
+                <button
+                  type="button"
+                  onclick={(e) => openCatMenu(hit.slug, e)}
+                  class="absolute left-1 bottom-1 flex items-center gap-0.5 rounded bg-neutral-900/70 px-1 py-0.5 leading-none transition-colors hover:bg-neutral-900 {catDots.length > 0 ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}"
+                  aria-label="Assign to category"
+                  title="Assign to category"
+                >
+                  {#if catDots.length > 0}
+                    {#each catDots.slice(0, 3) as cat}
+                      <span class="inline-block h-2 w-2 shrink-0 rounded-full" style="background-color: {cat.color};"></span>
+                    {/each}
+                    {#if catDots.length > 3}<span class="text-[9px] text-neutral-400">+{catDots.length - 3}</span>{/if}
+                  {:else}
+                    <svg viewBox="0 0 16 16" width="9" height="9" fill="currentColor" class="text-neutral-400"><path d="M7.75 2a.75.75 0 0 1 .75.75V7h4.25a.75.75 0 0 1 0 1.5H8.5v4.25a.75.75 0 0 1-1.5 0V8.5H2.75a.75.75 0 0 1 0-1.5H7V2.75A.75.75 0 0 1 7.75 2z"/></svg>
+                  {/if}
+                </button>
+              {/if}
               <button
                 type="button"
                 onclick={(e) => { e.stopPropagation(); void copyTag(hit.tag, hit.slug); }}
@@ -655,6 +801,138 @@
     </div>
   </footer>
 </div>
+
+{#if catMenuSlug}
+  <div
+    role="menu"
+    tabindex="-1"
+    class="fixed z-40 min-w-44 rounded-lg border border-neutral-700 bg-neutral-900 py-1 shadow-xl"
+    style="top: {catMenuPos.top}px; left: {catMenuPos.left}px;"
+    onclick={(e) => e.stopPropagation()}
+    onkeydown={(e) => { if (e.key === 'Escape') catMenuSlug = null; }}
+  >
+    {#if categories.length === 0}
+      <p class="px-3 py-1.5 text-xs italic text-neutral-500">No categories yet.</p>
+    {:else}
+      {#each categories as cat (cat.id)}
+        {@const inCat = cat.slugs.includes(catMenuSlug)}
+        <button
+          type="button"
+          onclick={() => toggleSlugInCategory(cat.id, catMenuSlug!)}
+          class="flex w-full items-center gap-2 px-3 py-1.5 text-xs transition-colors hover:bg-neutral-800 {inCat ? 'text-neutral-200' : 'text-neutral-400'}"
+        >
+          <span
+            class="inline-block h-2.5 w-2.5 shrink-0 rounded-full border-2 transition-colors {inCat ? 'border-transparent' : 'border-neutral-600'}"
+            style="{inCat ? `background-color: ${cat.color};` : ''}"
+          ></span>
+          <span class="flex-1 text-left">{cat.name}</span>
+          {#if inCat}<svg viewBox="0 0 16 16" width="10" height="10" fill="currentColor" class="shrink-0 text-emerald-400"><path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 0 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0z"/></svg>{/if}
+        </button>
+      {/each}
+      <div class="mx-2 my-1 h-px bg-neutral-800"></div>
+    {/if}
+    <button
+      type="button"
+      onclick={() => { showCategoryManager = true; catMenuSlug = null; }}
+      class="flex w-full items-center gap-1.5 px-3 py-1.5 text-xs text-neutral-500 transition-colors hover:bg-neutral-800 hover:text-neutral-300"
+    >
+      <svg viewBox="0 0 16 16" width="10" height="10" fill="currentColor"><path d="M7.75 2a.75.75 0 0 1 .75.75V7h4.25a.75.75 0 0 1 0 1.5H8.5v4.25a.75.75 0 0 1-1.5 0V8.5H2.75a.75.75 0 0 1 0-1.5H7V2.75A.75.75 0 0 1 7.75 2z"/></svg>
+      Manage categories
+    </button>
+  </div>
+{/if}
+
+{#if showCategoryManager}
+  <div
+    class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm"
+    role="dialog"
+    aria-modal="true"
+    aria-label="Manage favourite categories"
+  >
+    <button type="button" class="absolute inset-0 h-full w-full cursor-default" aria-label="Close" onclick={() => showCategoryManager = false}></button>
+    <div class="relative z-10 mx-4 flex w-full max-w-md flex-col rounded-xl border border-neutral-700 bg-neutral-900 shadow-2xl" style="max-height: 85vh;">
+      <div class="flex shrink-0 items-center justify-between border-b border-neutral-800 px-4 py-3">
+        <h2 class="text-sm font-semibold text-neutral-100">Favourite Categories</h2>
+        <button type="button" onclick={() => showCategoryManager = false} class="text-lg leading-none text-neutral-500 transition-colors hover:text-neutral-200" aria-label="Close">✕</button>
+      </div>
+      <div class="flex-1 overflow-y-auto p-4 space-y-2">
+        {#if categories.length === 0}
+          <p class="py-6 text-center text-sm text-neutral-500">No categories yet — create one below.</p>
+        {/if}
+        {#each categories as cat (cat.id)}
+          <div class="flex items-center gap-2 rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-2">
+            <input
+              type="color"
+              value={cat.color}
+              oninput={(e) => recolorCategory(cat.id, e.currentTarget.value)}
+              class="h-7 w-7 shrink-0 cursor-pointer rounded border border-neutral-700 bg-transparent p-0.5"
+              title="Change colour"
+            />
+            <input
+              type="text"
+              value={cat.name}
+              onchange={(e) => renameCategory(cat.id, e.currentTarget.value)}
+              class="min-w-0 flex-1 bg-transparent text-sm text-neutral-200 focus:outline-none"
+              placeholder="Category name"
+            />
+            <span class="shrink-0 text-xs text-neutral-500">{cat.slugs.length} artist{cat.slugs.length !== 1 ? 's' : ''}</span>
+            <button
+              type="button"
+              onclick={() => deleteCategory(cat.id)}
+              class="shrink-0 text-sm leading-none text-neutral-600 transition-colors hover:text-red-400"
+              title="Delete category"
+              aria-label="Delete {cat.name}"
+            >✕</button>
+          </div>
+        {/each}
+      </div>
+      <div class="shrink-0 border-t border-neutral-800 p-4">
+        <form onsubmit={(e) => { e.preventDefault(); createCategory(newCatName, newCatColor); }} class="flex items-center gap-2">
+          <input type="color" bind:value={newCatColor} class="h-8 w-8 shrink-0 cursor-pointer rounded border border-neutral-700 bg-neutral-800 p-0.5" title="Pick colour" />
+          <input
+            type="text"
+            bind:value={newCatName}
+            placeholder="New category name"
+            class="min-w-0 flex-1 rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-1.5 text-sm text-neutral-100 placeholder-neutral-500 focus:border-indigo-500 focus:outline-none"
+          />
+          <button
+            type="submit"
+            disabled={!newCatName.trim()}
+            class="shrink-0 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-40"
+          >Add</button>
+        </form>
+        <div class="mt-2 flex items-center gap-1.5">
+          <span class="text-xs text-neutral-500">Quick colours:</span>
+          {#each PRESET_COLORS as c (c)}
+            <button
+              type="button"
+              onclick={() => newCatColor = c}
+              class="h-4 w-4 shrink-0 rounded-full border-2 transition-transform hover:scale-125 {newCatColor === c ? 'border-white scale-110' : 'border-transparent'}"
+              style="background-color: {c};"
+              title={c}
+            ></button>
+          {/each}
+        </div>
+      </div>
+      <div class="shrink-0 flex gap-2 border-t border-neutral-800 px-4 py-3">
+        <button
+          type="button"
+          onclick={exportFavourites}
+          class="flex-1 rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-1.5 text-xs text-neutral-200 transition-colors hover:border-indigo-500 hover:bg-neutral-700"
+          title="Export favourites and categories as JSON"
+        >↑ Export JSON</button>
+        <button
+          type="button"
+          onclick={() => importInput?.click()}
+          class="flex-1 rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-1.5 text-xs text-neutral-200 transition-colors hover:border-indigo-500 hover:bg-neutral-700"
+          title="Import favourites and categories from JSON"
+        >↓ Import JSON</button>
+      </div>
+    </div>
+  </div>
+{/if}
+
+<input bind:this={importInput} type="file" accept=".json" class="hidden" aria-hidden="true" onchange={onImportFile} />
 
 {#if active}
   <ArtistLightbox
