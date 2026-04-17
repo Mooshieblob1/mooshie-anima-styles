@@ -78,7 +78,8 @@
     <button
       type="button"
       onclick={onprev}
-      class="absolute left-3 top-1/2 z-20 -translate-y-1/2 flex h-10 w-10 items-center justify-center rounded-full border border-neutral-700 bg-neutral-900/90 text-neutral-200 transition-colors hover:border-indigo-500 hover:text-white focus:outline-none"
+      class="absolute left-3 top-1/2 z-20 -translate-y-1/2 flex items-center justify-center rounded-full border-2 border-neutral-400 bg-neutral-800 text-white shadow-lg transition-colors hover:border-indigo-400 hover:bg-neutral-700 focus:outline-none"
+      style="width: clamp(2.5rem, 2.5vw, 4rem); height: clamp(2.5rem, 2.5vw, 4rem); font-size: clamp(1.1rem, 1.4vw, 1.8rem);"
       aria-label="Previous artist"
     >
       ←
@@ -88,7 +89,8 @@
     <button
       type="button"
       onclick={onnext}
-      class="absolute right-3 top-1/2 z-20 -translate-y-1/2 flex h-10 w-10 items-center justify-center rounded-full border border-neutral-700 bg-neutral-900/90 text-neutral-200 transition-colors hover:border-indigo-500 hover:text-white focus:outline-none"
+      class="absolute right-3 top-1/2 z-20 -translate-y-1/2 flex items-center justify-center rounded-full border-2 border-neutral-400 bg-neutral-800 text-white shadow-lg transition-colors hover:border-indigo-400 hover:bg-neutral-700 focus:outline-none"
+      style="width: clamp(2.5rem, 2.5vw, 4rem); height: clamp(2.5rem, 2.5vw, 4rem); font-size: clamp(1.1rem, 1.4vw, 1.8rem);"
       aria-label="Next artist"
     >
       →
