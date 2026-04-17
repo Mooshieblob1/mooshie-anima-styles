@@ -3,6 +3,7 @@
   import { createArtistGalleryStore } from "../store.svelte.js";
   import type { ArtistEntry, ArtistSearchHit } from "../types.js";
   import ArtistLightbox from "./ArtistLightbox.svelte";
+  import ColorPicker from "./ColorPicker.svelte";
 
   interface Props {
     manifestUrl: string;
@@ -861,13 +862,7 @@
         {/if}
         {#each categories as cat (cat.id)}
           <div class="flex items-center gap-2 rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-2">
-            <input
-              type="color"
-              value={cat.color}
-              oninput={(e) => recolorCategory(cat.id, e.currentTarget.value)}
-              class="h-7 w-7 shrink-0 cursor-pointer rounded border border-neutral-700 bg-transparent p-0.5"
-              title="Change colour"
-            />
+            <ColorPicker value={cat.color} onchange={(c) => recolorCategory(cat.id, c)} />
             <input
               type="text"
               value={cat.name}
@@ -888,7 +883,7 @@
       </div>
       <div class="shrink-0 border-t border-neutral-800 p-4">
         <form onsubmit={(e) => { e.preventDefault(); createCategory(newCatName, newCatColor); }} class="flex items-center gap-2">
-          <input type="color" bind:value={newCatColor} class="h-8 w-8 shrink-0 cursor-pointer rounded border border-neutral-700 bg-neutral-800 p-0.5" title="Pick colour" />
+          <ColorPicker value={newCatColor} onchange={(c) => newCatColor = c} />
           <input
             type="text"
             bind:value={newCatName}
@@ -901,18 +896,6 @@
             class="shrink-0 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-40"
           >Add</button>
         </form>
-        <div class="mt-2 flex items-center gap-1.5">
-          <span class="text-xs text-neutral-500">Quick colours:</span>
-          {#each PRESET_COLORS as c (c)}
-            <button
-              type="button"
-              onclick={() => newCatColor = c}
-              class="h-4 w-4 shrink-0 rounded-full border-2 transition-transform hover:scale-125 {newCatColor === c ? 'border-white scale-110' : 'border-transparent'}"
-              style="background-color: {c};"
-              title={c}
-            ></button>
-          {/each}
-        </div>
       </div>
       <div class="shrink-0 flex gap-2 border-t border-neutral-800 px-4 py-3">
         <button

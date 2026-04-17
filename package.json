@@ -12,6 +12,7 @@
     "@sveltejs/vite-plugin-svelte": "^5",
     "@tailwindcss/vite": "^4",
     "@tsconfig/svelte": "^5.0.8",
+    "sharp": "^0.34.5",
     "svelte": "^5",
     "svelte-check": "^4",
     "tailwindcss": "^4",
