@@ -611,6 +611,7 @@
           {/if}
         </div>
 
+        {#if !infiniteScroll}
         <div class="flex items-center gap-0.5 rounded-lg border border-neutral-800 bg-neutral-900/50 p-1">
           <span class="px-1.5 text-xs text-neutral-500">Per page:</span>
           {#each PAGE_SIZES as size}
@@ -623,6 +624,7 @@
             </button>
           {/each}
         </div>
+        {/if}
         <label class="flex cursor-pointer items-center gap-1.5 rounded-lg border bg-neutral-900/50 px-2 py-1 text-xs transition-colors {infiniteScroll ? 'border-indigo-600/40 text-indigo-400' : 'border-neutral-800 text-neutral-400 hover:text-neutral-200'}">
           <input type="checkbox" bind:checked={infiniteScroll} onclick={() => { currentPage = 1; infiniteCount = pageSize; }} class="accent-indigo-500" />
           Infinite scroll
