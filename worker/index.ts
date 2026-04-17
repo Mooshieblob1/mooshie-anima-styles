@@ -20,6 +20,12 @@ const MIME: Record<string, string> = {
   json: "application/json",
 };
 
+const IMAGE_EXT = new Set(["webp", "png", "jpg", "jpeg"]);
+
+function isImage(key: string): boolean {
+  return IMAGE_EXT.has(key.split(".").pop()?.toLowerCase() ?? "");
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     // CORS preflight
@@ -31,8 +37,33 @@ export default {
       return new Response("Method Not Allowed", { status: 405 });
     }
 
-    const key = new URL(request.url).pathname.replace(/^\//, "");
+    const url = new URL(request.url);
+    const key = url.pathname.replace(/^\//, "");
     if (!key) return new Response("Not Found", { status: 404 });
+
+    // ── Images: serve from Cloudflare edge cache, ignoring browser no-cache ──
+    // Images are immutable (versioned URLs). Even if the user does Ctrl+Shift+R
+    // the browser's Cache-Control: no-cache header is stripped before the edge
+    // cache lookup, so R2 is never hit after the first visitor warms that edge node.
+    if (request.method === "GET" && isImage(key)) {
+      const edgeCache = caches.default;
+      // Use a clean request as cache key — no browser cache-busting headers
+      const cacheKey = new Request(url.toString());
+
+      const cached = await edgeCache.match(cacheKey);
+      if (cached) return cached;
+
+      const object = await env.BUCKET.get(key);
+      if (!object) return new Response("Not Found", { status: 404 });
+
+      const response = new Response(object.body, {
+        headers: buildHeaders(object.httpMetadata?.contentType, key, object.httpEtag),
+      });
+
+      // Store in edge cache (fire-and-forget; don't block the response)
+      void edgeCache.put(cacheKey, response.clone());
+      return response;
+    }
 
     // HEAD — use R2 head() to avoid transferring the body
     if (request.method === "HEAD") {
@@ -43,7 +74,8 @@ export default {
       });
     }
 
-    // GET
+    // GET for non-image assets (JSON manifest, shards, etc.)
+    // These respect browser cache-busting normally.
     const object = await env.BUCKET.get(key, {
       onlyIf: { etagDoesNotMatch: request.headers.get("If-None-Match") ?? undefined },
     });
