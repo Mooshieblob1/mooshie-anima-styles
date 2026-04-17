@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onMount, tick } from "svelte";
   import Lenis from "lenis";
   import { createArtistGalleryStore } from "../store.svelte.js";
   import type { ArtistEntry, ArtistSearchHit } from "../types.js";
@@ -264,6 +264,7 @@
     pageSize = size;
     currentPage = Math.max(1, Math.floor(firstIndex / size) + 1);
     requestAnimationFrame(() => {
+      lenis?.resize();
       scrollContainer?.dispatchEvent(new Event("scroll"));
     });
   }

@@ -41,9 +41,29 @@
     };
   }
 
+  let imgEl = $state<HTMLImageElement | null>(null);
+  let infoBarEl = $state<HTMLDivElement | null>(null);
+
   function cycleZoom(e: MouseEvent) {
     e.stopPropagation();
-    zoom = zoom === 1 ? 1.5 : 1;
+    if (zoom > 1) {
+      zoom = 1;
+      return;
+    }
+    const target = 1.5;
+    if (imgEl) {
+      const { width, height } = imgEl.getBoundingClientRect();
+      // Reserve vertical space for the info bar + gap + wrapper padding
+      // so zooming never pushes elements off screen.
+      const infoH = infoBarEl?.getBoundingClientRect().height ?? 0;
+      const reservedV = infoH + 12 /* gap */ + 32 /* wrapper padding top+bottom */;
+      const availH = Math.max(0, window.innerHeight - reservedV);
+      const availW = window.innerWidth * 0.92; // matches max-w-[92vw] wrapper cap
+      const maxZoom = Math.min(availW / width, availH / height);
+      zoom = Math.min(target, Math.max(1, maxZoom));
+    } else {
+      zoom = target;
+    }
   }
 
   function displayTag(tag: string): string {
@@ -84,7 +104,7 @@
   <div
     in:fromCard={{ origin }}
     out:toCard={{ origin }}
-    class="relative z-10 flex max-h-[92vh] flex-col items-center gap-3 p-4">
+    class="relative z-10 flex w-auto max-w-[92vw] max-h-[92vh] flex-col items-center gap-3 p-4">
     {#if onprev}
       <button
         type="button"
@@ -106,32 +126,34 @@
       </button>
     {/if}
     {#if entry.hasImage && entry.imageUrl}
-      <div class="relative">
+      <div class="relative flex min-h-0 flex-1 items-center justify-center">
         <button
           type="button"
           onclick={cycleZoom}
           style="zoom: {zoom}; transition: zoom 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);"
-          class="block {zoom > 1 ? 'cursor-zoom-out' : 'cursor-zoom-in'} focus:outline-none"
+          class="flex h-full min-h-0 items-center {zoom > 1 ? 'cursor-zoom-out' : 'cursor-zoom-in'} focus:outline-none"
           aria-label="{zoom > 1 ? 'Zoom out' : 'Zoom in'}"
           title="{zoom > 1 ? 'Click to zoom out' : 'Click to zoom in'}"
         >
           <img
+            bind:this={imgEl}
             src={entry.imageUrl}
             alt={entry.tag}
-            class="max-h-screen max-w-screen w-auto rounded-lg border border-neutral-800 object-contain shadow-2xl"
+            class="h-full max-h-full max-w-full w-auto rounded-lg border border-neutral-800 object-contain shadow-2xl"
           />
         </button>
       </div>
     {:else}
       <div
-        class="flex aspect-3/4 w-screen max-h-screen items-center justify-center rounded-lg border border-neutral-800 bg-neutral-900 text-sm text-neutral-500"
+        class="flex aspect-3/4 min-h-0 flex-1 items-center justify-center rounded-lg border border-neutral-800 bg-neutral-900 text-sm text-neutral-500"
       >
         no preview available
       </div>
     {/if}
 
     <div
-      class="w-full max-w-[92vw] flex flex-wrap items-center justify-between gap-3 rounded-lg border border-neutral-800 bg-neutral-900/90 px-4 py-3"
+      bind:this={infoBarEl}
+      class="w-full shrink-0 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-neutral-800 bg-neutral-900/90 px-4 py-3"
     >
       <div class="min-w-0 flex-1">
         <a
