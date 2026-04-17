@@ -1,6 +1,5 @@
 <script lang="ts">
   import { onMount, tick } from "svelte";
-  import Lenis from "lenis";
   import { createArtistGalleryStore } from "../store.svelte.js";
   import type { ArtistEntry, ArtistSearchHit } from "../types.js";
   import ArtistLightbox from "./ArtistLightbox.svelte";
@@ -66,12 +65,6 @@
   let active = $state<ArtistEntry | null>(null);
   let activeIndex = $state(-1);
   let lightboxZoom = $state(1);
-  let lightboxOrigin = $state<{ x: number; y: number } | null>(null);
-
-  function cardCenter(el: HTMLElement): { x: number; y: number } {
-    const r = el.getBoundingClientRect();
-    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
-  }
   let queryInput = $state("");
   let searchDebounce: number | null = null;
   let pageJumpInput = $state("");
@@ -131,24 +124,7 @@
     return () => mq.removeEventListener("change", handler);
   });
 
-  onMount(() => {
-    // Wait a tick for scrollContainer to be bound
-    requestAnimationFrame(() => {
-      if (!scrollContainer) return;
-      lenis = new Lenis({
-        wrapper: scrollContainer,
-        content: scrollContainer,
-        lerp: 0.1,
-        smoothWheel: true,
-      });
-      function raf(time: number) {
-        lenis!.raf(time);
-        requestAnimationFrame(raf);
-      }
-      requestAnimationFrame(raf);
-    });
-    return () => { lenis?.destroy(); lenis = null; };
-  });
+
 
   function onSearchInput(value: string) {
     queryInput = value;
@@ -219,14 +195,9 @@
   }
 
   let scrollContainer = $state<HTMLDivElement | null>(null);
-  let lenis: Lenis | null = null;
 
   function scrollToTop() {
-    if (lenis) {
-      lenis.scrollTo(0, { immediate: true });
-    } else {
-      scrollContainer?.scrollTo({ top: 0, behavior: "instant" });
-    }
+    scrollContainer?.scrollTo({ top: 0, behavior: "instant" });
     scrollContainer?.dispatchEvent(new Event("scroll"));
   }
 
@@ -264,7 +235,6 @@
     pageSize = size;
     currentPage = Math.max(1, Math.floor(firstIndex / size) + 1);
     requestAnimationFrame(() => {
-      lenis?.resize();
       scrollContainer?.dispatchEvent(new Event("scroll"));
     });
   }
@@ -557,8 +527,8 @@
             tabindex="0"
             style="animation-delay: {Math.min(i * 30, 450)}ms"
             class="card-slide group flex flex-col items-stretch overflow-hidden rounded-lg border bg-neutral-900 text-left transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-500 {copiedSlug === hit.slug ? 'border-emerald-500' : favourites.has(hit.slug) ? 'border-pink-700 hover:border-pink-500' : 'border-neutral-800 hover:border-indigo-500'}"
-            onclick={(e) => { lightboxOrigin = cardCenter(e.currentTarget as HTMLElement); openHit(hit.slug, i); }}
-            onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); lightboxOrigin = null; openHit(hit.slug, i); } }}
+            onclick={() => openHit(hit.slug, i)}
+            onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openHit(hit.slug, i); } }}
             oncontextmenu={(e) => { e.preventDefault(); void copyTag(hit.tag, hit.slug); }}
             title="{hit.tag} · Right-click to copy tag"
           >
@@ -692,7 +662,6 @@
     onclose={closeLightbox}
     {oninsertTag}
     bind:zoom={lightboxZoom}
-    origin={lightboxOrigin}
     onprev={activeIndex > 0 ? () => navigateTo(activeIndex - 1) : undefined}
     onnext={activeIndex >= 0 && activeIndex < pageEntries.length - 1 ? () => navigateTo(activeIndex + 1) : undefined}
   />
