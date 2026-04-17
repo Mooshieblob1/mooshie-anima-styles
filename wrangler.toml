@@ -1,0 +1,15 @@
+name            = "anima-cdn"
+main            = "worker/index.ts"
+compatibility_date = "2026-04-17"
+
+# Bind the R2 bucket — must match the bucket name in your Cloudflare dashboard
+[[r2_buckets]]
+binding     = "BUCKET"
+bucket_name = "mooshie-anima"
+
+# Route: point cdn.mooshieblob.com/* to this worker.
+# After deploying, make sure the DNS A/CNAME for cdn.mooshieblob.com is
+# orange-clouded (proxied) in Cloudflare DNS.
+[[routes]]
+pattern       = "cdn.mooshieblob.com"
+custom_domain = true
