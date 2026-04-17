@@ -69,6 +69,9 @@
   let queryInput = $state("");
   let searchDebounce: number | null = null;
   let pageJumpInput = $state("");
+  let infiniteScroll = $state(localStorage.getItem("infiniteScroll") === "true");
+  let infiniteCount = $state(50);
+  let sentinelEl = $state<HTMLDivElement | null>(null);
 
   type Theme = "light" | "dark" | "auto";
   let theme = $state<Theme>((localStorage.getItem("theme") as Theme) ?? "auto");
@@ -264,8 +267,9 @@
   }
 
   async function navigateTo(index: number) {
-    const clamped = Math.max(0, Math.min(pageEntries.length - 1, index));
-    await openHit(pageEntries[clamped].slug, clamped);
+    const entries = visibleEntries;
+    const clamped = Math.max(0, Math.min(entries.length - 1, index));
+    await openHit(entries[clamped].slug, clamped);
   }
 
   function closeLightbox() {
@@ -380,6 +384,9 @@
   const pageEntries = $derived(
     sortedEntries.slice((safePage - 1) * pageSize, safePage * pageSize),
   );
+  const visibleEntries = $derived(
+    infiniteScroll ? sortedEntries.slice(0, infiniteCount) : pageEntries
+  );
 
   // ---------------------------------------------------------------------------
   // Image preload cache — keep a sliding window of ±4 pages in memory
@@ -421,9 +428,29 @@
 
   let showGenInfo = $state(false);
 
+  // Reset infinite scroll position when the entry list changes (sort/filter/search)
+  $effect(() => {
+    sortedEntries;
+    infiniteCount = pageSize;
+  });
+
+  // IntersectionObserver — loads next page worth of cards as user nears the bottom
+  $effect(() => {
+    const el = sentinelEl;
+    if (!el) return;
+    const obs = new IntersectionObserver((entries) => {
+      if (entries[0].isIntersecting && infiniteCount < sortedEntries.length) {
+        infiniteCount = Math.min(infiniteCount + pageSize, sortedEntries.length);
+      }
+    }, { rootMargin: "400px" });
+    obs.observe(el);
+    return () => obs.disconnect();
+  });
+
   $effect(() => {
     localStorage.setItem("theme", theme);
     localStorage.setItem("cardSliderVal", String(cardSliderVal));
+    localStorage.setItem("infiniteScroll", String(infiniteScroll));
     const isLight = theme === "light" || (theme === "auto" && !systemDark);
     document.documentElement.classList.toggle("light", isLight);
   });
@@ -587,6 +614,10 @@
             </button>
           {/each}
         </div>
+        <label class="flex cursor-pointer items-center gap-1.5 rounded-lg border bg-neutral-900/50 px-2 py-1 text-xs transition-colors {infiniteScroll ? 'border-indigo-600/40 text-indigo-400' : 'border-neutral-800 text-neutral-400 hover:text-neutral-200'}">
+          <input type="checkbox" bind:checked={infiniteScroll} onclick={() => { currentPage = 1; infiniteCount = pageSize; }} class="accent-indigo-500" />
+          Infinite scroll
+        </label>
       </div>
     {/if}
   </header>
@@ -600,7 +631,7 @@
       <div class="p-8 text-center text-sm text-neutral-500">loading artists…</div>
     {:else}
       <p class="pt-3 text-center text-xs text-neutral-500">Right click a card to copy a tag</p>
-      {#if totalPages > 1}
+      {#if totalPages > 1 && !infiniteScroll}
         <div class="flex flex-wrap items-center justify-center gap-2 border-b border-neutral-800/60 px-4 py-2">
           <button
             type="button"
@@ -646,7 +677,7 @@
       {/if}
       {#key cardAnimKey}
       <div class="grid gap-3 p-4" style="grid-template-columns: repeat(auto-fill, minmax({cardMinWidth}px, 1fr))">
-        {#each pageEntries as hit, i (hit.slug)}
+        {#each visibleEntries as hit, i (hit.slug)}
           {@const url = thumbUrl(hit)}
           {@const rank = (safePage - 1) * pageSize + i + 1}
           {@const border = cardBorderInfo(hit.slug)}
@@ -728,8 +759,14 @@
       </div>
       {/key}
 
+      {#if infiniteScroll}
+        <div bind:this={sentinelEl} class="py-6 text-center text-xs text-neutral-600">
+          {#if infiniteCount < sortedEntries.length}Loading more…{:else}All {sortedEntries.length.toLocaleString()} artists shown{/if}
+        </div>
+      {/if}
+
       <!-- Pagination -->
-      {#if totalPages > 1}
+      {#if totalPages > 1 && !infiniteScroll}
         <div class="flex flex-wrap items-center justify-center gap-2 px-4 py-4">
           <button
             type="button"
