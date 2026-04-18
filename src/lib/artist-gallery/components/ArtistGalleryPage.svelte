@@ -187,6 +187,29 @@
     URL.revokeObjectURL(url);
   }
 
+  function exportFavouritesTxt() {
+    // Export the currently-scoped list (active category → that category's
+    // slugs in order; otherwise all favourites). Artist tags are written one
+    // per line with '@' prefix stripped and underscores preserved for prompt
+    // pasting.
+    const scope = activeCategoryId
+      ? categories.find(c => c.id === activeCategoryId)?.slugs ?? []
+      : favouritesList;
+    const slugToTag = new Map(allEntries.map(e => [e.slug, e.tag.replace(/^@/, "")]));
+    const lines = scope.map(s => slugToTag.get(s) ?? s);
+    if (lines.length === 0) return;
+    const filenameScope = activeCategoryId
+      ? (categories.find(c => c.id === activeCategoryId)?.name ?? "category").replace(/[^a-z0-9_-]+/gi, "_")
+      : "favourites";
+    const blob = new Blob([lines.join("\n") + "\n"], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `anima-${filenameScope}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   function onImportFile(e: Event) {
     const file = (e.target as HTMLInputElement).files?.[0];
     if (!file) return;
@@ -230,6 +253,31 @@
     const handler = (e: MediaQueryListEvent) => { systemDark = e.matches; };
     mq.addEventListener("change", handler);
     return () => mq.removeEventListener("change", handler);
+  });
+
+  // Keyboard hotkeys: 4–0 snap the card-size slider to 7 evenly-spaced
+  // densities (4 = biggest cards / fewest per row, 0 = smallest / most).
+  // Ignored while typing in an input/textarea/contenteditable or when a
+  // modifier key is held.
+  const SIZE_HOTKEYS: Record<string, number> = {
+    "4": 100, "5": 84, "6": 68, "7": 52, "8": 36, "9": 18, "0": 0,
+  };
+  onMount(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      const target = e.target as HTMLElement | null;
+      if (target) {
+        const tag = target.tagName;
+        if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || target.isContentEditable) return;
+      }
+      const mapped = SIZE_HOTKEYS[e.key];
+      if (mapped !== undefined) {
+        cardSliderVal = mapped;
+        e.preventDefault();
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
   });
 
 
@@ -551,7 +599,7 @@
       </div>
       {#if showToolbar}
       <div id="gallery-toolbar" class="mt-2 flex flex-wrap items-center justify-center gap-2">
-        <div class="flex items-center gap-1.5 rounded-lg border border-neutral-800 bg-neutral-900/50 px-2 py-1">
+        <div class="flex items-center gap-1.5 rounded-lg border border-neutral-800 bg-neutral-900/50 px-2 py-1" title="Card size (hotkeys: 4–0)">
           <span class="text-xs text-neutral-500">Size:</span>
           <input type="range" min="0" max="100" step="1" bind:value={cardSliderVal} class="w-20 accent-indigo-500" />
         </div>
@@ -973,6 +1021,13 @@
           class="flex-1 rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-1.5 text-xs text-neutral-200 transition-colors hover:border-indigo-500 hover:bg-neutral-700"
           title="Export favourites and categories as JSON"
         >↑ Export JSON</button>
+        <button
+          type="button"
+          onclick={exportFavouritesTxt}
+          class="flex-1 rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-1.5 text-xs text-neutral-200 transition-colors hover:border-indigo-500 hover:bg-neutral-700 disabled:cursor-not-allowed disabled:opacity-40"
+          disabled={(activeCategoryId ? (categories.find(c => c.id === activeCategoryId)?.slugs.length ?? 0) : favouritesList.length) === 0}
+          title={activeCategoryId ? "Export this category's artist names as a plain text list" : "Export favourite artist names as a plain text list"}
+        >↑ Export .txt</button>
         <button
           type="button"
           onclick={() => importInput?.click()}
