@@ -54,7 +54,7 @@ export default {
       if (cached) return cached;
 
       const object = await env.BUCKET.get(key);
-      if (!object) return new Response("Not Found", { status: 404 });
+      if (!object) return new Response("Not Found", { status: 404, headers: CORS });
 
       const response = new Response(object.body, {
         headers: buildHeaders(object.httpMetadata?.contentType, key, object.httpEtag),
@@ -68,31 +68,34 @@ export default {
     // HEAD — use R2 head() to avoid transferring the body
     if (request.method === "HEAD") {
       const meta = await env.BUCKET.head(key);
-      if (!meta) return new Response(null, { status: 404 });
+      if (!meta) return new Response(null, { status: 404, headers: CORS });
       return new Response(null, {
         headers: buildHeaders(meta.httpMetadata?.contentType, key, meta.httpEtag),
       });
     }
 
-    // GET for non-image assets (JSON manifest, shards, etc.)
-    // These respect browser cache-busting normally.
-    const object = await env.BUCKET.get(key, {
-      onlyIf: { etagDoesNotMatch: request.headers.get("If-None-Match") ?? undefined },
-    });
+    // GET for non-image assets (JSON manifest, shards, search index, etc.)
+    // These are also under an immutable versioned prefix, so we edge-cache them
+    // too. This is critical: without it, every user hit goes to R2 on every
+    // page load and trips Cloudflare's free-plan rate limit → edge 429s that
+    // have no CORS headers, which the browser surfaces as "failed to fetch".
+    {
+      const edgeCache = caches.default;
+      const cacheKey = new Request(url.toString());
 
-    if (!object) return new Response("Not Found", { status: 404 });
+      const cached = await edgeCache.match(cacheKey);
+      if (cached) return cached;
 
-    // R2 returns null body when onlyIf condition fails (etag matched → 304)
-    if (object.body === null) {
-      return new Response(null, {
-        status: 304,
+      const object = await env.BUCKET.get(key);
+      if (!object) return new Response("Not Found", { status: 404, headers: CORS });
+
+      const response = new Response(object.body, {
         headers: buildHeaders(object.httpMetadata?.contentType, key, object.httpEtag),
       });
-    }
 
-    return new Response(object.body, {
-      headers: buildHeaders(object.httpMetadata?.contentType, key, object.httpEtag),
-    });
+      void edgeCache.put(cacheKey, response.clone());
+      return response;
+    }
   },
 } satisfies ExportedHandler<Env>;
 
