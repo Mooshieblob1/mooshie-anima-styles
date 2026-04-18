@@ -1,0 +1,7 @@
+/*
+  X-Frame-Options: DENY
+  X-Content-Type-Options: nosniff
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), interest-cohort=(), payment=(), usb=()
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com https://*.cloudflare.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://cdn.mooshieblob.com; connect-src 'self' https://cdn.mooshieblob.com https://cloudflareinsights.com; font-src 'self' data:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'
+  Access-Control-Allow-Origin: https://anima.mooshieblob.com
+  Vary: Origin
