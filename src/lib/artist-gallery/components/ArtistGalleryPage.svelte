@@ -274,11 +274,18 @@
       if (mapped !== undefined) {
         cardSliderVal = mapped;
         e.preventDefault();
+        return;
+      }
+      // Auto-focus search bar when typing a printable character
+      if (e.key.length === 1 && searchInputEl) {
+        searchInputEl.focus();
       }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   });
+
+  let searchInputEl = $state<HTMLInputElement | null>(null);
 
 
 
@@ -352,11 +359,22 @@
   }
 
   let scrollContainer = $state<HTMLDivElement | null>(null);
+  let scrolled = $state(false);
 
   function scrollToTop() {
     scrollContainer?.scrollTo({ top: 0, behavior: "instant" });
     scrollContainer?.dispatchEvent(new Event("scroll"));
   }
+
+  // Track scroll position to show/hide the mobile scroll-to-top button.
+  $effect(() => {
+    const el = scrollContainer;
+    if (!el) return;
+    const onScroll = () => { scrolled = el.scrollTop > 400; };
+    el.addEventListener("scroll", onScroll, { passive: true });
+    onScroll();
+    return () => el.removeEventListener("scroll", onScroll);
+  });
 
   function goToPage(page: number) {
     currentPage = page;
@@ -539,7 +557,7 @@
     </div>
     </div>
     <div class="flex flex-col items-center gap-3">
-      <div class="flex flex-col items-center text-center">
+      <div class="order-2 lg:order-none flex flex-col items-center text-center">
         <h1 class="text-[1.265rem] font-semibold">Anima Style Gallery</h1>
         <p class="text-xs text-neutral-500">
           created by <a
@@ -564,10 +582,11 @@
       </div>
 
       <!-- Search -->
-      <div class="relative w-full max-w-sm">
+      <div class="order-1 lg:order-none relative w-full max-w-sm">
         <input
+          bind:this={searchInputEl}
           type="search"
-          placeholder="Search artist tag…"
+          placeholder="Search artist tag… (just start typing)"
           value={queryInput}
           oninput={(e) => onSearchInput(e.currentTarget.value)}
           class="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-neutral-100 placeholder-neutral-500 focus:border-indigo-500 focus:outline-none"
@@ -918,6 +937,19 @@
       >fartcore</a></span>
     </div>
   </footer>
+
+  <!-- Mobile/tablet scroll-to-top floating button -->
+  <button
+    type="button"
+    onclick={scrollToTop}
+    aria-label="Scroll to top"
+    title="Scroll to top"
+    class="lg:hidden fixed bottom-4 right-4 z-40 flex h-11 w-11 items-center justify-center rounded-full border border-neutral-700 bg-neutral-900/90 text-neutral-200 shadow-lg backdrop-blur transition-all hover:border-indigo-500 hover:text-white {scrolled ? 'opacity-100 translate-y-0 pointer-events-auto' : 'opacity-0 translate-y-2 pointer-events-none'}"
+  >
+    <svg viewBox="0 0 20 20" width="18" height="18" fill="currentColor" aria-hidden="true">
+      <path d="M10 4l-6 6h4v6h4v-6h4z"/>
+    </svg>
+  </button>
 </div>
 
 {#if catMenuSlug}

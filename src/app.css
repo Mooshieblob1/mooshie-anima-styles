@@ -24,3 +24,13 @@ html, body, #app {
   --color-neutral-950: oklch(98.5% 0 0);
   --color-red-400: oklch(42% 0.2 25);
 }
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes slideInLeft {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(0); }
+}
