@@ -571,8 +571,11 @@
         <p class="text-xs text-neutral-500">
           {#if store.manifest}
             {store.manifest.artistsWithImage.toLocaleString()} artists ·
-            Anima preview · release {store.manifest.releasePrefix} ·
-            <button type="button" onclick={() => (showGenInfo = true)} class="text-neutral-500 underline decoration-dotted hover:text-neutral-300 transition-colors">ℹ gen params</button>
+            Anima Preview 2 · release {store.manifest.releasePrefix} ·
+            <button type="button" onclick={() => (showGenInfo = true)} class="inline-flex items-center gap-1 rounded border border-neutral-700 bg-neutral-800/60 px-1.5 py-0.5 text-[11px] text-neutral-400 transition-colors hover:border-indigo-500 hover:text-neutral-200">
+              <svg viewBox="0 0 16 16" width="11" height="11" fill="currentColor" aria-hidden="true"><path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1Zm0 12.5a5.5 5.5 0 1 1 0-11 5.5 5.5 0 0 1 0 11ZM7.25 5h1.5v1.5h-1.5V5Zm0 3h1.5v3h-1.5V8Z"/></svg>
+              Gen Params
+            </button>
           {:else if store.manifestError}
             <span class="text-red-400">failed to load: {store.manifestError}</span>
           {:else}
