@@ -669,7 +669,7 @@
             onclick={() => setSort('uniqueness')}
             title="Surfaces hidden gems: artists with a distinctive style not yet overexposed"
           >
-            Unique
+            Trending
           </button>
           <div class="mx-1 h-3 w-px shrink-0 bg-neutral-700"></div>
           {#if sortField === 'uniqueness'}
