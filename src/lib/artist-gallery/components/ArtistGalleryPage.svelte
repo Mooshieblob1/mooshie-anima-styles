@@ -18,6 +18,7 @@
 
   type SortField = "postCount" | "name" | "uniqueness";
   type SortDir = "asc" | "desc";
+  type PostCountFilter = "over50" | "all";
   type PageSize = 25 | 50 | 100;
 
   // ---------------------------------------------------------------------------
@@ -39,6 +40,10 @@
 
   function sortablePostCount(entry: ArtistSearchHit): number {
     return entry.belowThreshold ? 0 : entry.postCount;
+  }
+
+  function passesPostCountFilter(entry: ArtistSearchHit): boolean {
+    return postCountFilter === "all" || sortablePostCount(entry) > 50;
   }
 
   let uniquenessJitter = $state<Float32Array>(new Float32Array(0));
@@ -65,6 +70,7 @@
 
   let sortField = $state<SortField>("postCount");
   let sortDir = $state<SortDir>("desc");
+  let postCountFilter = $state<PostCountFilter>("over50");
   const PAGE_SIZES: PageSize[] = [25, 50, 100];
   let pageSize = $state<PageSize>(50);
   let currentPage = $state(1);
@@ -411,6 +417,15 @@
     });
   }
 
+  function setPostCountFilter(filter: PostCountFilter) {
+    postCountFilter = filter;
+    cardAnimKey++;
+    currentPage = 1;
+    requestAnimationFrame(() => {
+      scrollToTop();
+    });
+  }
+
   function setPageSize(size: PageSize) {
     const firstIndex = (safePage - 1) * pageSize;
     pageSize = size;
@@ -442,6 +457,7 @@
         e.slug.includes(q) || e.tag.toLowerCase().replace(/_/g, " ").includes(q)
       );
     }
+    entries = entries.filter(passesPostCountFilter);
     if (activeCategoryId) {
       const catSlugs = new Set(categories.find(c => c.id === activeCategoryId)?.slugs ?? []);
       return entries.filter(e => catSlugs.has(e.slug));
@@ -654,6 +670,25 @@
           title="Manage categories & export/import"
         >⊞ Categories</button>
         <div class="flex items-center gap-0.5 rounded-lg border border-neutral-800 bg-neutral-900/50 p-1">
+          <span class="px-1.5 text-xs text-neutral-500">Posts:</span>
+          <button
+            type="button"
+            class="rounded px-2 py-0.5 text-xs transition-colors {postCountFilter === 'over50' ? 'bg-indigo-600 text-white' : 'text-neutral-400 hover:text-neutral-200'}"
+            onclick={() => setPostCountFilter('over50')}
+            title="Show artists with more than 50 posts"
+          >
+            &gt;50
+          </button>
+          <button
+            type="button"
+            class="rounded px-2 py-0.5 text-xs transition-colors {postCountFilter === 'all' ? 'bg-indigo-600 text-white' : 'text-neutral-400 hover:text-neutral-200'}"
+            onclick={() => setPostCountFilter('all')}
+            title="Include capped ≤50 artists"
+          >
+            All
+          </button>
+        </div>
+        <div class="flex items-center gap-0.5 rounded-lg border border-neutral-800 bg-neutral-900/50 p-1">
           <span class="px-1.5 text-xs text-neutral-500">Sort:</span>
           <button
             type="button"
@@ -687,22 +722,39 @@
             >
               ↻ Rotate
             </button>
-          {:else}
+          {:else if sortField === 'postCount'}
             <button
               type="button"
               class="rounded px-2 py-0.5 text-xs transition-colors {sortDir === 'desc' ? 'bg-indigo-600 text-white' : 'text-neutral-400 hover:text-neutral-200'}"
               onclick={() => setDir('desc')}
-              title="Descending"
+              title="Maximum post count first"
             >
-              ↓ Desc
+              Max
             </button>
             <button
               type="button"
               class="rounded px-2 py-0.5 text-xs transition-colors {sortDir === 'asc' ? 'bg-indigo-600 text-white' : 'text-neutral-400 hover:text-neutral-200'}"
               onclick={() => setDir('asc')}
-              title="Ascending"
+              title="Minimum post count first"
             >
-              ↑ Asc
+              Min
+            </button>
+          {:else}
+            <button
+              type="button"
+              class="rounded px-2 py-0.5 text-xs transition-colors {sortDir === 'desc' ? 'bg-indigo-600 text-white' : 'text-neutral-400 hover:text-neutral-200'}"
+              onclick={() => setDir('desc')}
+              title="Z to A"
+            >
+              Z-A
+            </button>
+            <button
+              type="button"
+              class="rounded px-2 py-0.5 text-xs transition-colors {sortDir === 'asc' ? 'bg-indigo-600 text-white' : 'text-neutral-400 hover:text-neutral-200'}"
+              onclick={() => setDir('asc')}
+              title="A to Z"
+            >
+              A-Z
             </button>
           {/if}
         </div>

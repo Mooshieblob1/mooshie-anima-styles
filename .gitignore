@@ -3,3 +3,8 @@ dist/
 .svelte-kit/
 .env
 *.local
+.tmp/
+.wrangler/
+Shards/
+anima-1.0.csv
+scripts/anima-r2-artist-refresh.mjs
