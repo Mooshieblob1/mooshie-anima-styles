@@ -1,5 +1,6 @@
 <script lang="ts">
   import { fade } from "svelte/transition";
+  import { formatCopiedTag } from "../tags.js";
   import type { ArtistEntry } from "../types.js";
 
   interface Props {
@@ -43,6 +44,10 @@
     return tag.replace(/^@/, "").replace(/_/g, " ");
   }
 
+  function displayPostCount(entry: ArtistEntry): string {
+    return entry.belowThreshold ? "≤50" : entry.postCount.toLocaleString();
+  }
+
   function onBackdropKey(e: KeyboardEvent) {
     if (e.key === "Escape") onclose();
     if (e.key === "ArrowLeft") { e.preventDefault(); onprev?.(); }
@@ -51,7 +56,7 @@
 
   async function copyTag() {
     try {
-      await navigator.clipboard.writeText(entry.tag);
+      await navigator.clipboard.writeText(formatCopiedTag(entry.tag));
     } catch {
       // no-op; clipboard may be unavailable in some contexts
     }
@@ -140,7 +145,7 @@
           {displayTag(entry.tag)}
         </a>
         <div class="mt-0.5 text-xs text-neutral-500">
-          {entry.postCount.toLocaleString()} posts
+          {displayPostCount(entry)} posts
           {#if entry.aliases.length > 0}
             · aliases: {entry.aliases.map((a) => a.replace(/^@/, "")).join(", ")}
           {/if}
@@ -158,7 +163,7 @@
           <button
             type="button"
             class="rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-indigo-500"
-            onclick={() => oninsertTag?.("@" + entry.tag.replace(/^@/, ""))}
+            onclick={() => oninsertTag?.(formatCopiedTag(entry.tag))}
           >
             Insert into prompt
           </button>

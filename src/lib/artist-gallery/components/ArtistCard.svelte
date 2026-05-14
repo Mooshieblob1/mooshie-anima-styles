@@ -8,7 +8,8 @@
 
   let { entry, onclick }: Props = $props();
 
-  function formatCount(n: number): string {
+  function formatCount(n: number, belowThreshold = false): string {
+    if (belowThreshold) return "≤50";
     if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
     if (n >= 1_000) return `${(n / 1_000).toFixed(0)}k`;
     return String(n);
@@ -42,6 +43,6 @@
   </div>
   <div class="flex items-center justify-between gap-2 px-2 py-1.5">
     <span class="truncate text-sm text-red-400">{displayTag(entry.tag)}</span>
-    <span class="shrink-0 text-xs text-neutral-500">{formatCount(entry.postCount)}</span>
+    <span class="shrink-0 text-xs text-neutral-500">{formatCount(entry.postCount, entry.belowThreshold)}</span>
   </div>
 </button>

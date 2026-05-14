@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount, tick } from "svelte";
   import { createArtistGalleryStore } from "../store.svelte.js";
+  import { formatCopiedTag } from "../tags.js";
   import type { ArtistEntry, ArtistSearchHit } from "../types.js";
   import ArtistLightbox from "./ArtistLightbox.svelte";
   import ColorPicker from "./ColorPicker.svelte";
@@ -31,8 +32,13 @@
     return Math.exp(-0.5 * ((lx - mu) / sigma) ** 2);
   }
 
-  function baseUniqueness(postCount: number): number {
-    return logNormalScore(postCount, 5.5, 1.8);
+  function baseUniqueness(entry: ArtistSearchHit): number {
+    if (entry.belowThreshold) return 0;
+    return logNormalScore(entry.postCount, 5.5, 1.8);
+  }
+
+  function sortablePostCount(entry: ArtistSearchHit): number {
+    return entry.belowThreshold ? 0 : entry.postCount;
   }
 
   let uniquenessJitter = $state<Float32Array>(new Float32Array(0));
@@ -313,7 +319,7 @@
       const imageUrl = hit.hasImage && hit.imageId
         ? `${store.manifest.imageBaseUrl}/${store.manifest.releasePrefix}/images/${hit.imageId}.webp`
         : "";
-      active = { tag: hit.tag, slug: hit.slug, imageId: hit.imageId, imageUrl, objectKey: "", postCount: hit.postCount, aliases: [], hasImage: hit.hasImage };
+      active = { tag: hit.tag, slug: hit.slug, imageId: hit.imageId, imageUrl, objectKey: "", postCount: hit.postCount, belowThreshold: hit.belowThreshold, aliases: [], hasImage: hit.hasImage };
       activeIndex = index;
     }
     // Fetch full entry (for aliases) in background and update when ready.
@@ -339,7 +345,8 @@
     return `${store.manifest.imageBaseUrl}/${store.manifest.releasePrefix}/images/${hit.imageId}.webp`;
   }
 
-  function formatCount(n: number): string {
+  function formatCount(n: number, belowThreshold = false): string {
+    if (belowThreshold) return "≤50";
     if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
     if (n >= 1_000) return `${(n / 1_000).toFixed(0)}k`;
     return String(n);
@@ -352,8 +359,7 @@
   let copiedSlug = $state<string | null>(null);
 
   async function copyTag(tag: string, slug: string) {
-    const formatted = "@" + tag.replace(/^@/, "");
-    await navigator.clipboard.writeText(formatted);
+    await navigator.clipboard.writeText(formatCopiedTag(tag));
     copiedSlug = slug;
     window.setTimeout(() => { copiedSlug = null; }, 1500);
   }
@@ -419,7 +425,7 @@
     if (sortField === "uniqueness") {
       const jitter = uniquenessJitter;
       entries = [...allEntries]
-        .map((e, i) => ({ e, score: baseUniqueness(e.postCount) * (jitter[i] ?? 1) }))
+        .map((e, i) => ({ e, score: baseUniqueness(e) * (jitter[i] ?? 1) }))
         .sort((a, b) => b.score - a.score)
         .map((x) => x.e);
     } else {
@@ -427,7 +433,7 @@
       entries = [...allEntries].sort((a, b) =>
         sortField === "name"
           ? a.slug.localeCompare(b.slug) * dir
-          : (a.postCount - b.postCount) * dir,
+          : (sortablePostCount(a) - sortablePostCount(b)) * dir || Number(a.belowThreshold) - Number(b.belowThreshold),
       );
     }
     const q = queryInput.trim().toLowerCase();
@@ -854,7 +860,7 @@
             </div>
             <div class="flex items-center justify-between gap-2 px-2 py-1.5">
               <span class="truncate text-sm text-red-400">{displayTag(hit.tag)}</span>
-              <span class="shrink-0 text-xs text-neutral-500">{formatCount(hit.postCount)}</span>
+              <span class="shrink-0 text-xs text-neutral-500">{formatCount(hit.postCount, hit.belowThreshold)}</span>
             </div>
           </div>
         {/each}

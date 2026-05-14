@@ -13,6 +13,8 @@ export interface ArtistEntry {
   objectKey: string;
   /** Danbooru post count (popularity; ranking signal). */
   postCount: number;
+  /** Count is capped because Gelbooru reports <=50 posts or no reliable count. */
+  belowThreshold?: boolean;
   /** Known aliases for the artist tag. */
   aliases: string[];
   /** Whether the webp was present on disk when the index was built. */
@@ -50,6 +52,7 @@ export interface ArtistSearchHit {
   /** Matches ArtistEntry.imageId; combine with manifest.imageBaseUrl to render thumbnails without a shard fetch. */
   imageId: string;
   postCount: number;
+  belowThreshold?: boolean;
   shard: string;
   hasImage: boolean;
 }
