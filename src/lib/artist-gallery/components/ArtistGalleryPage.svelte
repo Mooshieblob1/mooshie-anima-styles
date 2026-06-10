@@ -113,11 +113,53 @@
     e.preventDefault();
     if (favourites.has(slug)) {
       favouritesList = favouritesList.filter(s => s !== slug);
-      // also remove from all categories
+      // also remove from all categories and drop any note
       categories = categories.map(c => ({ ...c, slugs: c.slugs.filter(s => s !== slug) }));
+      if (notes[slug] !== undefined) {
+        const next = { ...notes };
+        delete next[slug];
+        notes = next;
+      }
     } else {
       favouritesList = [...favouritesList, slug];
     }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Favourite notes — personal annotations keyed by slug (e.g. the name an
+  // artist is known by on social platforms, which often differs from their
+  // Danbooru tag).
+  // ---------------------------------------------------------------------------
+  let notes = $state<Record<string, string>>(JSON.parse(localStorage.getItem("favNotes") || "{}"));
+  let noteEditSlug = $state<string | null>(null);
+  let noteEditPos = $state({ top: 0, left: 0 });
+  let noteDraft = $state("");
+
+  $effect(() => { localStorage.setItem("favNotes", JSON.stringify(notes)); });
+
+  function openNoteEditor(slug: string, e: MouseEvent) {
+    e.stopPropagation();
+    if (noteEditSlug === slug) { saveNote(); return; }
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    noteEditPos = { top: rect.bottom + 4, left: Math.min(rect.left, window.innerWidth - 240) };
+    noteDraft = notes[slug] ?? "";
+    noteEditSlug = slug;
+    catMenuSlug = null;
+  }
+
+  function saveNote() {
+    if (noteEditSlug === null) return;
+    const text = noteDraft.trim();
+    const next = { ...notes };
+    if (text) next[noteEditSlug] = text;
+    else delete next[noteEditSlug];
+    notes = next;
+    noteEditSlug = null;
+  }
+
+  function focusInput(node: HTMLInputElement) {
+    node.focus();
+    node.select();
   }
 
   // ---------------------------------------------------------------------------
@@ -180,6 +222,7 @@
 
   function openCatMenu(slug: string, e: MouseEvent) {
     e.stopPropagation();
+    saveNote();
     if (catMenuSlug === slug) { catMenuSlug = null; return; }
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
     catMenuPos = { top: rect.bottom + 4, left: rect.left };
@@ -189,7 +232,7 @@
   function closeCatMenu() { catMenuSlug = null; }
 
   function exportFavourites() {
-    const data = JSON.stringify({ version: 1, favourites: favouritesList, categories }, null, 2);
+    const data = JSON.stringify({ version: 1, favourites: favouritesList, categories, notes }, null, 2);
     const blob = new Blob([data], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -238,6 +281,12 @@
             typeof (c as FavCategory).name === "string" &&
             typeof (c as FavCategory).color === "string" &&
             Array.isArray((c as FavCategory).slugs)
+          );
+        if (typeof raw.notes === "object" && raw.notes !== null && !Array.isArray(raw.notes))
+          notes = Object.fromEntries(
+            Object.entries(raw.notes as Record<string, unknown>).filter(
+              (entry): entry is [string, string] => typeof entry[1] === "string"
+            )
           );
       } catch { /* invalid JSON */ }
       (e.target as HTMLInputElement).value = "";
@@ -454,7 +503,9 @@
     const q = queryInput.trim().toLowerCase();
     if (q) {
       entries = entries.filter(e =>
-        e.slug.includes(q) || e.tag.toLowerCase().replace(/_/g, " ").includes(q)
+        e.slug.includes(q) ||
+        e.tag.toLowerCase().replace(/_/g, " ").includes(q) ||
+        (notes[e.slug]?.toLowerCase().includes(q) ?? false)
       );
     }
     entries = entries.filter(passesPostCountFilter);
@@ -554,7 +605,7 @@
   });
 </script>
 
-<svelte:document onclick={closeCatMenu} />
+<svelte:document onclick={() => { closeCatMenu(); saveNote(); }} />
 
 <div class="flex h-full w-full flex-col overflow-hidden bg-neutral-950 text-neutral-100">
   <header class="relative flex-none border-b border-neutral-800 bg-neutral-900/60 px-4 py-3">
@@ -879,22 +930,33 @@
                 title="{favourites.has(hit.slug) ? 'Unfavourite' : 'Favourite'}"
               >{favourites.has(hit.slug) ? '♥' : '♡'}</button>
               {#if favourites.has(hit.slug)}
-                <button
-                  type="button"
-                  onclick={(e) => openCatMenu(hit.slug, e)}
-                  class="absolute left-1 bottom-1 flex items-center gap-0.5 rounded bg-neutral-900/70 px-1 py-0.5 leading-none transition-colors hover:bg-neutral-900 {catDots.length > 0 ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}"
-                  aria-label="Assign to category"
-                  title="Assign to category"
-                >
-                  {#if catDots.length > 0}
-                    {#each catDots.slice(0, 3) as cat}
-                      <span class="inline-block h-2 w-2 shrink-0 rounded-full" style="background-color: {cat.color};"></span>
-                    {/each}
-                    {#if catDots.length > 3}<span class="text-[9px] text-neutral-400">+{catDots.length - 3}</span>{/if}
-                  {:else}
-                    <svg viewBox="0 0 16 16" width="9" height="9" fill="currentColor" class="text-neutral-400"><path d="M7.75 2a.75.75 0 0 1 .75.75V7h4.25a.75.75 0 0 1 0 1.5H8.5v4.25a.75.75 0 0 1-1.5 0V8.5H2.75a.75.75 0 0 1 0-1.5H7V2.75A.75.75 0 0 1 7.75 2z"/></svg>
-                  {/if}
-                </button>
+                <div class="absolute left-1 bottom-1 flex items-center gap-1">
+                  <button
+                    type="button"
+                    onclick={(e) => openCatMenu(hit.slug, e)}
+                    class="flex items-center gap-0.5 rounded bg-neutral-900/70 px-1 py-0.5 leading-none transition-colors hover:bg-neutral-900 {catDots.length > 0 ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}"
+                    aria-label="Assign to category"
+                    title="Assign to category"
+                  >
+                    {#if catDots.length > 0}
+                      {#each catDots.slice(0, 3) as cat}
+                        <span class="inline-block h-2 w-2 shrink-0 rounded-full" style="background-color: {cat.color};"></span>
+                      {/each}
+                      {#if catDots.length > 3}<span class="text-[9px] text-neutral-400">+{catDots.length - 3}</span>{/if}
+                    {:else}
+                      <svg viewBox="0 0 16 16" width="9" height="9" fill="currentColor" class="text-neutral-400"><path d="M7.75 2a.75.75 0 0 1 .75.75V7h4.25a.75.75 0 0 1 0 1.5H8.5v4.25a.75.75 0 0 1-1.5 0V8.5H2.75a.75.75 0 0 1 0-1.5H7V2.75A.75.75 0 0 1 7.75 2z"/></svg>
+                    {/if}
+                  </button>
+                  <button
+                    type="button"
+                    onclick={(e) => openNoteEditor(hit.slug, e)}
+                    class="flex items-center rounded bg-neutral-900/70 px-1 py-0.5 leading-none transition-colors hover:bg-neutral-900 {notes[hit.slug] ? 'opacity-100 text-sky-400' : 'opacity-0 group-hover:opacity-100 text-neutral-400'}"
+                    aria-label="{notes[hit.slug] ? 'Edit note for' : 'Add note for'} {hit.tag}"
+                    title="{notes[hit.slug] ? 'Edit note' : 'Add note'}"
+                  >
+                    <svg viewBox="0 0 16 16" width="9" height="9" fill="currentColor"><path d="M11.013 1.427a1.75 1.75 0 0 1 2.474 0l1.086 1.086a1.75 1.75 0 0 1 0 2.474l-8.61 8.61c-.21.21-.47.364-.756.445l-3.251.93a.75.75 0 0 1-.927-.928l.929-3.25c.081-.286.235-.547.445-.758l8.61-8.61Zm.176 4.823L9.75 4.81l-6.286 6.287a.253.253 0 0 0-.064.108l-.558 1.953 1.953-.558a.253.253 0 0 0 .108-.064Zm1.238-3.763a.25.25 0 0 0-.354 0L10.811 3.75l1.439 1.44 1.263-1.263a.25.25 0 0 0 0-.354Z"/></svg>
+                  </button>
+                </div>
               {/if}
               <button
                 type="button"
@@ -914,6 +976,14 @@
               <span class="truncate text-sm text-red-400">{displayTag(hit.tag)}</span>
               <span class="shrink-0 text-xs text-neutral-500">{formatCount(hit.postCount, hit.belowThreshold)}</span>
             </div>
+            {#if notes[hit.slug]}
+              <button
+                type="button"
+                onclick={(e) => openNoteEditor(hit.slug, e)}
+                class="-mt-1 w-full truncate px-2 pb-1.5 text-left text-xs italic text-sky-400/90 transition-colors hover:text-sky-300"
+                title="{notes[hit.slug]} — click to edit"
+              >{notes[hit.slug]}</button>
+            {/if}
           </div>
         {/each}
       </div>
@@ -1050,6 +1120,33 @@
       <svg viewBox="0 0 16 16" width="10" height="10" fill="currentColor"><path d="M7.75 2a.75.75 0 0 1 .75.75V7h4.25a.75.75 0 0 1 0 1.5H8.5v4.25a.75.75 0 0 1-1.5 0V8.5H2.75a.75.75 0 0 1 0-1.5H7V2.75A.75.75 0 0 1 7.75 2z"/></svg>
       Manage categories
     </button>
+  </div>
+{/if}
+
+{#if noteEditSlug}
+  <div
+    role="dialog"
+    tabindex="-1"
+    aria-label="Edit artist note"
+    class="fixed z-40 rounded-lg border border-neutral-700 bg-neutral-900 p-2 shadow-xl"
+    style="top: {noteEditPos.top}px; left: {noteEditPos.left}px;"
+    onclick={(e) => e.stopPropagation()}
+    onkeydown={(e) => { if (e.key === 'Escape') noteEditSlug = null; }}
+  >
+    <form onsubmit={(e) => { e.preventDefault(); saveNote(); }} class="flex items-center gap-1.5">
+      <input
+        use:focusInput
+        type="text"
+        bind:value={noteDraft}
+        maxlength="120"
+        placeholder="Personal note…"
+        class="w-48 rounded-md border border-neutral-700 bg-neutral-800 px-2 py-1 text-xs text-neutral-100 placeholder-neutral-500 focus:border-sky-500 focus:outline-none"
+      />
+      <button
+        type="submit"
+        class="shrink-0 rounded-md bg-sky-600 px-2 py-1 text-xs font-medium text-white transition-colors hover:bg-sky-500"
+      >Save</button>
+    </form>
   </div>
 {/if}
 
