@@ -10,10 +10,40 @@
     oninsertTag?: (tag: string) => void;
     onprev?: () => void;
     onnext?: () => void;
+    /** Whether the open artist has a second preview to flip to. */
+    canFlip?: boolean;
+    /** Flip the open artist's preview image (p1 ↔ p2). */
+    onflip?: () => void;
     zoom?: number;
   }
 
-  let { entry, onclose, oninsertTag, onprev, onnext, zoom = $bindable(1) }: Props = $props();
+  let { entry, onclose, oninsertTag, onprev, onnext, canFlip = false, onflip, zoom = $bindable(1) }: Props = $props();
+
+  /** Current variant inferred from the trailing -pN suffix of the imageId. */
+  const currentVariant = $derived(entry.imageId.endsWith("-p2") ? 2 : 1);
+
+  /**
+   * Svelte action: play the 3D card-rotate flip when the variant changes for
+   * the *same* artist. Navigating to a different artist (slug change) does not
+   * animate, so prev/next stays a clean cross-fade.
+   */
+  function flipImage(node: HTMLElement, params: { slug: string; variant: number }) {
+    let prev = params;
+    return {
+      update(next: { slug: string; variant: number }) {
+        if (next.slug === prev.slug && next.variant !== prev.variant) {
+          node.animate(
+            [
+              { transform: "rotateY(90deg)", opacity: 0.15, offset: 0 },
+              { transform: "rotateY(0deg)", opacity: 1, offset: 1 },
+            ],
+            { duration: 450, easing: "cubic-bezier(0.22, 1, 0.36, 1)" }
+          );
+        }
+        prev = next;
+      },
+    };
+  }
 
   // CSS `zoom` (unlike transform: scale) participates in layout, so the
   // enlarged image grows the scrollable column and the info bar reflows to sit
@@ -93,14 +123,15 @@
         type="button"
         onclick={cycleZoom}
         style="zoom: {zoom}; transition: zoom 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);"
-        class="block shrink-0 {zoom > 1 ? 'cursor-zoom-out' : 'cursor-zoom-in'} focus:outline-none"
+        class="block shrink-0 perspective-[600px] {zoom > 1 ? 'cursor-zoom-out' : 'cursor-zoom-in'} focus:outline-none"
         aria-label="{zoom > 1 ? 'Zoom out' : 'Zoom in'}"
         title="{zoom > 1 ? 'Click to zoom out' : 'Click to zoom in'}"
       >
         <img
           src={entry.imageUrl}
           alt={entry.tag}
-          class="block max-h-[78vh] max-w-[88vw] w-auto rounded-lg border border-neutral-800 object-contain shadow-2xl"
+          use:flipImage={{ slug: entry.slug, variant: currentVariant }}
+          class="block max-h-[78vh] max-w-[88vw] w-auto rounded-lg border border-neutral-800 object-contain shadow-2xl backface-hidden"
         />
       </button>
     {:else}
@@ -131,6 +162,20 @@
         </div>
       </div>
       <div class="flex shrink-0 gap-2">
+        {#if canFlip}
+          <button
+            type="button"
+            class="flex items-center gap-1.5 rounded-md border border-neutral-700 bg-neutral-800 px-3 py-1.5 text-xs text-neutral-200 transition-colors hover:border-indigo-500 hover:bg-neutral-700"
+            onclick={onflip}
+            title="Switch preview image"
+            aria-label="Switch preview image"
+          >
+            <svg viewBox="0 0 16 16" width="11" height="11" fill="currentColor" aria-hidden="true">
+              <path d="M4 4h7V2l3 3-3 3V6H4V4zm8 8H5v2l-3-3 3-3v2h7v2z" />
+            </svg>
+            Image {currentVariant}
+          </button>
+        {/if}
         <button
           type="button"
           class="rounded-md border border-neutral-700 bg-neutral-800 px-3 py-1.5 text-xs text-neutral-200 transition-colors hover:border-indigo-500 hover:bg-neutral-700"

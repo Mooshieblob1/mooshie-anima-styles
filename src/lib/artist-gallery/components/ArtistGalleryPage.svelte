@@ -149,11 +149,42 @@
     return imageId.replace(/-p\d+$/, `-p${variant}`);
   }
 
+  /**
+   * Set a single artist's variant. An override is only stored while it differs
+   * from the global value; once it matches the global it's dropped, so the card
+   * rejoins the global default (and moves with future global toggles).
+   */
+  function setVariant(slug: string, value: 1 | 2) {
+    if (value === globalVariant) {
+      if (variantOverrides[slug] === undefined) return;
+      const next = { ...variantOverrides };
+      delete next[slug];
+      variantOverrides = next;
+    } else {
+      variantOverrides = { ...variantOverrides, [slug]: value };
+    }
+  }
+
+  /**
+   * Switch the global default. Any per-card override that now matches the new
+   * global value is cleared, so cards the global has "caught up to" rejoin it
+   * and flip together on the next toggle. Overrides that still differ persist.
+   */
+  function setGlobalVariant(value: 1 | 2) {
+    globalVariant = value;
+    let changed = false;
+    const next: Record<string, 1 | 2> = {};
+    for (const [slug, v] of Object.entries(variantOverrides)) {
+      if (v === value) changed = true;
+      else next[slug] = v;
+    }
+    if (changed) variantOverrides = next;
+  }
+
   function toggleCardVariant(hit: ArtistSearchHit, e: MouseEvent) {
     e.stopPropagation();
     e.preventDefault();
-    const next: 1 | 2 = effectiveVariant(hit) === 1 ? 2 : 1;
-    variantOverrides = { ...variantOverrides, [hit.slug]: next };
+    setVariant(hit.slug, effectiveVariant(hit) === 1 ? 2 : 1);
   }
 
   /** Pick the requested variant's image fields from a loaded shard entry. */
@@ -482,6 +513,37 @@
     active = null;
     activeIndex = -1;
     store.closeArtist();
+  }
+
+  /** Whether the currently-open artist has a second preview to flip to. */
+  const activeCanFlip = $derived.by(() => {
+    const a = active;
+    if (!a) return false;
+    const hit = allEntries.find((e) => e.slug === a.slug);
+    return !!hit && hasVariants(hit);
+  });
+
+  /**
+   * Flip the open artist's preview in the modal. Updates the per-card override
+   * (so the grid card stays in sync) and swaps the displayed image — using the
+   * loaded shard entry's images[] when available, else the search hit.
+   */
+  function flipActiveVariant() {
+    const a = active;
+    if (!a) return;
+    const hit = allEntries.find((e) => e.slug === a.slug);
+    if (!hit || !hasVariants(hit) || !store.manifest) return;
+    const nextV: 1 | 2 = effectiveVariant(hit) === 1 ? 2 : 1;
+    setVariant(a.slug, nextV);
+    if (store.activeArtist?.slug === a.slug && store.activeArtist.images?.length) {
+      active = resolveEntryVariant(store.activeArtist, nextV);
+    } else {
+      const imageId = withVariant(hit.imageId, nextV);
+      const imageUrl = hit.hasImage && hit.imageId
+        ? `${store.manifest.imageBaseUrl}/${store.manifest.releasePrefix}/images/${imageId}.avif`
+        : "";
+      active = { ...a, imageId, imageUrl, hasImage: hit.hasImage };
+    }
   }
 
   function thumbUrl(hit: ArtistSearchHit): string {
@@ -924,7 +986,7 @@
             <button
               type="button"
               class="rounded px-2 py-0.5 text-xs transition-colors {globalVariant === v ? 'bg-indigo-600 text-white' : 'text-neutral-400 hover:text-neutral-200'}"
-              onclick={() => (globalVariant = v as 1 | 2)}
+              onclick={() => setGlobalVariant(v as 1 | 2)}
             >
               {v}
             </button>
@@ -1352,6 +1414,8 @@
     onclose={closeLightbox}
     {oninsertTag}
     bind:zoom={lightboxZoom}
+    canFlip={activeCanFlip}
+    onflip={flipActiveVariant}
     onprev={activeIndex > 0 ? () => navigateTo(activeIndex - 1) : undefined}
     onnext={activeIndex >= 0 && activeIndex < pageEntries.length - 1 ? () => navigateTo(activeIndex + 1) : undefined}
   />
