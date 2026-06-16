@@ -1,5 +1,15 @@
 /** Types for the artist gallery portable module. Mirrors shapes written by scripts/r2_build_indices.py. */
 
+/** One preview image variant (e.g. p1, p2) for an artist. */
+export interface ArtistImageVariant {
+  /** Variant identifier ("p1", "p2", …). */
+  variantId: string;
+  imageId: string;
+  imageUrl: string;
+  objectKey: string;
+  hasImage: boolean;
+}
+
 export interface ArtistEntry {
   /** Raw artist tag as it appears in anima-tags.json (e.g. "@dairi"). */
   tag: string;
@@ -19,6 +29,8 @@ export interface ArtistEntry {
   aliases: string[];
   /** Whether the webp was present on disk when the index was built. */
   hasImage: boolean;
+  /** Per-variant preview images (p1, p2, …) when the release provides multiple. */
+  images?: ArtistImageVariant[];
 }
 
 export interface ArtistShard {
@@ -55,6 +67,8 @@ export interface ArtistSearchHit {
   belowThreshold?: boolean;
   shard: string;
   hasImage: boolean;
+  /** Number of preview image variants available (e.g. 2 → p1 + p2). */
+  variantCount?: number;
 }
 
 export interface SearchOptions {

@@ -68,6 +68,15 @@
   let allLoading = $state(false);
   let allError = $state<string | null>(null);
 
+  // True number of distinct artists, de-duplicated by slug. Derived from the
+  // loaded index so it self-corrects (the raw manifest count includes a handful
+  // of duplicate slugs); falls back to the manifest count before data loads.
+  const uniqueArtistCount = $derived(
+    allEntries.length
+      ? new Set(allEntries.map((e) => e.slug)).size
+      : store.manifest?.artistCount ?? 0
+  );
+
   let sortField = $state<SortField>("postCount");
   let sortDir = $state<SortDir>("desc");
   let postCountFilter = $state<PostCountFilter>("over50");
@@ -107,6 +116,83 @@
   $effect(() => {
     localStorage.setItem("favourites", JSON.stringify(favouritesList));
   });
+
+  // ---------------------------------------------------------------------------
+  // Preview image variant — global default + per-card override.
+  // Only meaningful for artists with variantCount >= 2 (p1 + p2). The effective
+  // variant for a card is its override (if any), otherwise the global default;
+  // per-card overrides persist when the global default is flipped.
+  // ---------------------------------------------------------------------------
+  let globalVariant = $state<1 | 2>(localStorage.getItem("globalVariant") === "2" ? 2 : 1);
+  let variantOverrides = $state<Record<string, 1 | 2>>(
+    JSON.parse(localStorage.getItem("variantOverrides") || "{}")
+  );
+
+  $effect(() => {
+    localStorage.setItem("globalVariant", String(globalVariant));
+  });
+  $effect(() => {
+    localStorage.setItem("variantOverrides", JSON.stringify(variantOverrides));
+  });
+
+  function hasVariants(hit: ArtistSearchHit): boolean {
+    return (hit.variantCount ?? 1) >= 2;
+  }
+
+  function effectiveVariant(hit: ArtistSearchHit): 1 | 2 {
+    if (!hasVariants(hit)) return 1;
+    return variantOverrides[hit.slug] ?? globalVariant;
+  }
+
+  /** Swap the trailing -pN suffix of an imageId to the requested variant. */
+  function withVariant(imageId: string, variant: 1 | 2): string {
+    return imageId.replace(/-p\d+$/, `-p${variant}`);
+  }
+
+  function toggleCardVariant(hit: ArtistSearchHit, e: MouseEvent) {
+    e.stopPropagation();
+    e.preventDefault();
+    const next: 1 | 2 = effectiveVariant(hit) === 1 ? 2 : 1;
+    variantOverrides = { ...variantOverrides, [hit.slug]: next };
+  }
+
+  /** Pick the requested variant's image fields from a loaded shard entry. */
+  function resolveEntryVariant(entry: ArtistEntry, variant: 1 | 2): ArtistEntry {
+    const imgs = entry.images;
+    if (imgs && imgs.length) {
+      const want = imgs.find((im) => im.variantId === `p${variant}`) ?? imgs[0];
+      return {
+        ...entry,
+        imageId: want.imageId,
+        imageUrl: want.imageUrl,
+        objectKey: want.objectKey,
+        hasImage: want.hasImage,
+      };
+    }
+    return entry;
+  }
+
+  /**
+   * Svelte action: play a 3D card-rotate animation whenever the bound variant
+   * value changes (but not on initial mount). Used for both the global switch
+   * and the per-card switch.
+   */
+  function flipOnVariantChange(node: HTMLElement, variant: number) {
+    let prev = variant;
+    return {
+      update(next: number) {
+        if (next === prev) return;
+        prev = next;
+        node.animate(
+          [
+            { transform: "rotateY(90deg)", opacity: 0.15, offset: 0 },
+            { transform: "rotateY(0deg)", opacity: 1, offset: 1 },
+          ],
+          { duration: 450, easing: "cubic-bezier(0.22, 1, 0.36, 1)" }
+        );
+      },
+    };
+  }
 
   function toggleFavourite(slug: string, e: MouseEvent) {
     e.stopPropagation();
@@ -370,16 +456,19 @@
     // Open the modal immediately with data already in the search index,
     // so the image and tag are visible without waiting for the shard fetch.
     const hit = allEntries.find(e => e.slug === slug);
+    const variant = hit ? effectiveVariant(hit) : 1;
     if (hit && store.manifest) {
+      const imageId = withVariant(hit.imageId, variant);
       const imageUrl = hit.hasImage && hit.imageId
-        ? `${store.manifest.imageBaseUrl}/${store.manifest.releasePrefix}/images/${hit.imageId}.avif`
+        ? `${store.manifest.imageBaseUrl}/${store.manifest.releasePrefix}/images/${imageId}.avif`
         : "";
-      active = { tag: hit.tag, slug: hit.slug, imageId: hit.imageId, imageUrl, objectKey: "", postCount: hit.postCount, belowThreshold: hit.belowThreshold, aliases: [], hasImage: hit.hasImage };
+      active = { tag: hit.tag, slug: hit.slug, imageId, imageUrl, objectKey: "", postCount: hit.postCount, belowThreshold: hit.belowThreshold, aliases: [], hasImage: hit.hasImage };
       activeIndex = index;
     }
-    // Fetch full entry (for aliases) in background and update when ready.
+    // Fetch full entry (for aliases + the variant's full image) in background.
     store.openArtist(slug).then(() => {
-      if (store.activeArtist && active?.slug === slug) active = store.activeArtist;
+      if (store.activeArtist && active?.slug === slug)
+        active = resolveEntryVariant(store.activeArtist, variant);
     });
   }
 
@@ -397,7 +486,8 @@
 
   function thumbUrl(hit: ArtistSearchHit): string {
     if (!store.manifest || !hit.hasImage || !hit.imageId) return "";
-    return `${store.manifest.imageBaseUrl}/${store.manifest.releasePrefix}/images/${hit.imageId}.avif`;
+    const imageId = withVariant(hit.imageId, effectiveVariant(hit));
+    return `${store.manifest.imageBaseUrl}/${store.manifest.releasePrefix}/images/${imageId}.avif`;
   }
 
   function formatCount(n: number, belowThreshold = false): string {
@@ -546,7 +636,7 @@
       for (let i = 0; i < lookahead; i++) {
         const hit = sortedEntries[i];
         if (hit?.hasImage && hit.imageId)
-          urls.push(`${imageBaseUrl}/${releasePrefix}/images/${hit.imageId}.avif`);
+          urls.push(`${imageBaseUrl}/${releasePrefix}/images/${withVariant(hit.imageId, effectiveVariant(hit))}.avif`);
       }
     } else {
       const start = Math.max(1, safePage - 4);
@@ -554,7 +644,7 @@
       for (let p = start; p <= end; p++) {
         for (const hit of sortedEntries.slice((p - 1) * pageSize, p * pageSize)) {
           if (hit.hasImage && hit.imageId)
-            urls.push(`${imageBaseUrl}/${releasePrefix}/images/${hit.imageId}.avif`);
+            urls.push(`${imageBaseUrl}/${releasePrefix}/images/${withVariant(hit.imageId, effectiveVariant(hit))}.avif`);
         }
       }
     }
@@ -643,8 +733,8 @@
         <p class="text-xs text-emerald-500 font-medium">Free forever</p>
         <p class="text-xs text-neutral-500">
           {#if store.manifest}
-            {store.manifest.artistsWithImage.toLocaleString()} artists ·
-            Anima Preview 2 · release {store.manifest.releasePrefix} ·
+            {uniqueArtistCount.toLocaleString()} artists ·
+            Anima 1.0 · release {store.manifest.releasePrefix} ·
             <button type="button" onclick={() => (showGenInfo = true)} class="inline-flex items-center gap-1 rounded border border-neutral-700 bg-neutral-800/60 px-1.5 py-0.5 text-[11px] text-neutral-400 transition-colors hover:border-indigo-500 hover:text-neutral-200">
               <svg viewBox="0 0 16 16" width="11" height="11" fill="currentColor" aria-hidden="true"><path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1Zm0 12.5a5.5 5.5 0 1 1 0-11 5.5 5.5 0 0 1 0 11ZM7.25 5h1.5v1.5h-1.5V5Zm0 3h1.5v3h-1.5V8Z"/></svg>
               Gen Params
@@ -828,6 +918,18 @@
           <input type="checkbox" bind:checked={infiniteScroll} onclick={() => { currentPage = 1; infiniteCount = pageSize; }} class="accent-indigo-500" />
           Infinite scroll
         </label>
+        <div class="flex items-center gap-0.5 rounded-lg border border-neutral-800 bg-neutral-900/50 p-1" title="Default preview image for artists that have two">
+          <span class="px-1.5 text-xs text-neutral-500">Image:</span>
+          {#each [1, 2] as v}
+            <button
+              type="button"
+              class="rounded px-2 py-0.5 text-xs transition-colors {globalVariant === v ? 'bg-indigo-600 text-white' : 'text-neutral-400 hover:text-neutral-200'}"
+              onclick={() => (globalVariant = v as 1 | 2)}
+            >
+              {v}
+            </button>
+          {/each}
+        </div>
       </div>
       {/if}
     {/if}
@@ -903,14 +1005,15 @@
             oncontextmenu={(e) => { e.preventDefault(); void copyTag(hit.tag, hit.slug); }}
             title="{hit.tag} · Right-click to copy tag"
           >
-            <div class="relative aspect-3/4 w-full bg-neutral-800">
+            <div class="relative aspect-3/4 w-full bg-neutral-800 perspective-[600px]">
               {#if url}
                 <img
                   src={url}
                   alt={hit.tag}
                   loading="lazy"
                   decoding="async"
-                  class="h-full w-full object-cover"
+                  use:flipOnVariantChange={effectiveVariant(hit)}
+                  class="h-full w-full object-cover backface-hidden"
                 />
               {:else}
                 <div class="flex h-full w-full items-center justify-center text-xs text-neutral-500">
@@ -929,6 +1032,18 @@
                 aria-label="{favourites.has(hit.slug) ? 'Unfavourite' : 'Favourite'} {hit.tag}"
                 title="{favourites.has(hit.slug) ? 'Unfavourite' : 'Favourite'}"
               >{favourites.has(hit.slug) ? '♥' : '♡'}</button>
+              {#if hasVariants(hit)}
+                <button
+                  type="button"
+                  onclick={(e) => toggleCardVariant(hit, e)}
+                  class="absolute right-1 top-9 flex h-6 items-center gap-0.5 rounded-full bg-neutral-900/70 px-1.5 text-[10px] font-semibold leading-none transition-colors hover:bg-neutral-900 hover:text-white {variantOverrides[hit.slug] ? 'text-indigo-400 ring-1 ring-indigo-500/60' : 'text-neutral-300'}"
+                  aria-label="Switch preview image for {hit.tag}"
+                  title="Showing image {effectiveVariant(hit)} — click to flip"
+                >
+                  <svg viewBox="0 0 16 16" width="9" height="9" fill="currentColor" aria-hidden="true"><path d="M4 4h7V2l3 3-3 3V6H4V4zm8 8H5v2l-3-3 3-3v2h7v2z"/></svg>
+                  {effectiveVariant(hit)}
+                </button>
+              {/if}
               {#if favourites.has(hit.slug)}
                 <div class="absolute left-1 bottom-1 flex items-center gap-1">
                   <button
