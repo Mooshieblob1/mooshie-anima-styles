@@ -825,7 +825,7 @@
 <div class="flex h-full w-full overflow-hidden bg-neutral-950 text-neutral-100">
   <!-- Left icon rail (desktop; collapses to the header top bar on mobile) -->
   <nav class="hidden flex-none flex-col items-center gap-1 border-r border-neutral-700 bg-neutral-900 py-3 md:flex" style="width: var(--rail-width)" aria-label="Primary">
-    <img src="/favicon-32.png" alt="" class="mb-1 h-7 w-7 rounded-md" />
+    <img src="/logo.svg" alt="MooshieUI" class="mb-1 h-7 w-7 rounded-md" />
     <div class="mb-1 h-px w-6 bg-neutral-700"></div>
     {@render railButton(icGrid, "All styles", !showFavouritesOnly && !activeCategoryId, () => { showFavouritesOnly = false; activeCategoryId = null; cardAnimKey++; }, undefined)}
     {@render railButton(icHeart, "Favourites", showFavouritesOnly, () => { showFavouritesOnly = !showFavouritesOnly; activeCategoryId = null; cardAnimKey++; }, favourites.size)}
@@ -841,7 +841,7 @@
     <header class="relative flex-none border-b border-neutral-700 bg-neutral-900 px-4 py-3">
       <!-- Mobile top bar (rail collapses here) -->
       <div class="mb-2.5 flex items-center gap-1 md:hidden">
-        <img src="/favicon-32.png" alt="" class="h-7 w-7 rounded-md" />
+        <img src="/logo.svg" alt="MooshieUI" class="h-7 w-7 rounded-md" />
         {@render railButton(icGrid, "All styles", !showFavouritesOnly && !activeCategoryId, () => { showFavouritesOnly = false; activeCategoryId = null; cardAnimKey++; }, undefined)}
         {@render railButton(icHeart, "Favourites", showFavouritesOnly, () => { showFavouritesOnly = !showFavouritesOnly; activeCategoryId = null; cardAnimKey++; }, favourites.size)}
         {@render railButton(icLayers, "Categories", showCategoryManager, () => (showCategoryManager = true), undefined)}
