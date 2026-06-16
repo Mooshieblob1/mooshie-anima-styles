@@ -372,7 +372,7 @@
     const hit = allEntries.find(e => e.slug === slug);
     if (hit && store.manifest) {
       const imageUrl = hit.hasImage && hit.imageId
-        ? `${store.manifest.imageBaseUrl}/${store.manifest.releasePrefix}/images/${hit.imageId}.webp`
+        ? `${store.manifest.imageBaseUrl}/${store.manifest.releasePrefix}/images/${hit.imageId}.avif`
         : "";
       active = { tag: hit.tag, slug: hit.slug, imageId: hit.imageId, imageUrl, objectKey: "", postCount: hit.postCount, belowThreshold: hit.belowThreshold, aliases: [], hasImage: hit.hasImage };
       activeIndex = index;
@@ -397,7 +397,7 @@
 
   function thumbUrl(hit: ArtistSearchHit): string {
     if (!store.manifest || !hit.hasImage || !hit.imageId) return "";
-    return `${store.manifest.imageBaseUrl}/${store.manifest.releasePrefix}/images/${hit.imageId}.webp`;
+    return `${store.manifest.imageBaseUrl}/${store.manifest.releasePrefix}/images/${hit.imageId}.avif`;
   }
 
   function formatCount(n: number, belowThreshold = false): string {
@@ -546,7 +546,7 @@
       for (let i = 0; i < lookahead; i++) {
         const hit = sortedEntries[i];
         if (hit?.hasImage && hit.imageId)
-          urls.push(`${imageBaseUrl}/${releasePrefix}/images/${hit.imageId}.webp`);
+          urls.push(`${imageBaseUrl}/${releasePrefix}/images/${hit.imageId}.avif`);
       }
     } else {
       const start = Math.max(1, safePage - 4);
@@ -554,7 +554,7 @@
       for (let p = start; p <= end; p++) {
         for (const hit of sortedEntries.slice((p - 1) * pageSize, p * pageSize)) {
           if (hit.hasImage && hit.imageId)
-            urls.push(`${imageBaseUrl}/${releasePrefix}/images/${hit.imageId}.webp`);
+            urls.push(`${imageBaseUrl}/${releasePrefix}/images/${hit.imageId}.avif`);
         }
       }
     }
