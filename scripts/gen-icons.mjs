@@ -6,7 +6,9 @@
  *   favicon-32.png     – 32×32 PNG  (modern browsers prefer this over .ico)
  *   favicon-180.png    – 180×180 Apple touch icon
  *   favicon-192.png    – 192×192 Android / PWA
- *   og-image.png       – 1200×630 Open Graph image (Facebook, Discord, X/Twitter)
+ *   og-image.png       – 600×600 square social thumbnail. Paired with a
+ *                        `summary` (not `summary_large_image`) card so Discord
+ *                        and X/Twitter render it small, beside the text.
  */
 
 import sharp from "sharp";
@@ -97,12 +99,13 @@ const [buf16, buf32] = await Promise.all([pngBuf(16), pngBuf(32)]);
 writeIco([buf16, buf32], resolve(out, "favicon.ico"));
 console.log("  ✓  favicon.ico  (16×16 + 32×32)");
 
-// ── OG image (1200×630) ───────────────────────────────────────────────────────
-// Place the logo centred on a dark background matching the site theme (#0a0a0a).
+// ── OG image (600×600 square) ──────────────────────────────────────────────────
+// A square thumbnail for `summary` cards: Discord shows it beside the embed text
+// and X/Twitter alongside the title — not as a full-width banner. The logo is
+// centred on a dark background matching the site theme (#0a0a0a).
 
-const logoSize = 400;
-const ogW = 1200;
-const ogH = 630;
+const logoSize = 440;
+const ogSize = 600;
 
 const logoBuf = await sharp(src)
   .resize(logoSize, logoSize, { fit: "contain", background: { r: 0, g: 0, b: 0, alpha: 0 } })
@@ -111,8 +114,8 @@ const logoBuf = await sharp(src)
 
 await sharp({
   create: {
-    width: ogW,
-    height: ogH,
+    width: ogSize,
+    height: ogSize,
     channels: 4,
     background: { r: 10, g: 10, b: 10, alpha: 255 },
   },
@@ -120,13 +123,13 @@ await sharp({
   .composite([
     {
       input: logoBuf,
-      left: Math.round((ogW - logoSize) / 2),
-      top: Math.round((ogH - logoSize) / 2),
+      left: Math.round((ogSize - logoSize) / 2),
+      top: Math.round((ogSize - logoSize) / 2),
     },
   ])
   .png()
   .toFile(resolve(out, "og-image.png"));
 
-console.log("  ✓  og-image.png  (1200×630)");
+console.log("  ✓  og-image.png  (600×600)");
 
 console.log("\nAll icons written to public/");

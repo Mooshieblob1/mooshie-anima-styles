@@ -17,7 +17,7 @@ There are no test, lint, or format commands configured. No CI workflows exist.
 
 ### Utility Scripts
 
-- `node scripts/gen-icons.mjs` — regenerates favicons and `og-image.png` in `public/` from `src/icons/icon.png` using sharp. Run manually after changing the source icon.
+- `node scripts/gen-icons.mjs` — regenerates the favicons and the 600×600 square `og-image.png` social thumbnail in `public/` from `src/icons/icon.png` using sharp. Run manually after changing the source icon.
 
 ## Tech Stack
 
