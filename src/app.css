@@ -1,5 +1,12 @@
 @import "tailwindcss";
 
+/* ==========================================================================
+   Anima Style Gallery — MooshieUI design system foundation.
+   Dark is the default, canonical canvas; `.light` (toggled on <html> by the
+   theme $effect) re-points the surface/text/border roles. One Mooshie-Yellow
+   accent (#ffcc00); status colors stay (emerald success, red danger).
+   ========================================================================== */
+
 html {
   font-size: 110%;
 }
@@ -10,19 +17,254 @@ html, body, #app {
   padding: 0;
 }
 
-/* Light theme: invert the neutral scale so existing dark-coded classes render correctly */
+body {
+  font-family: var(--font-sans);
+  background: var(--bg);
+  color: var(--text);
+  transition: background var(--dur-base) var(--ease-standard), color var(--dur-base);
+}
+
+* { box-sizing: border-box; }
+
+/* --------------------------------------------------------------------------
+   MooshieUI raw tokens. These are the source values; the Tailwind color ramp
+   (@theme below) and the `.light` variant point at them. Theme-varying roles
+   are re-declared under `.light`; everything here is the dark canon.
+   -------------------------------------------------------------------------- */
+:root {
+  /* Neutral ramp (near-black → white) */
+  --neutral-50:  #fafafa;
+  --neutral-100: #f5f5f5;
+  --neutral-200: #e5e5e5;
+  --neutral-300: #d4d4d4;
+  --neutral-400: #a3a3a3;
+  --neutral-500: #737373;
+  --neutral-600: #525252;
+  --neutral-700: #404040;
+  --neutral-800: #262626;
+  --neutral-900: #171717;
+  --neutral-950: #0a0a0a;
+
+  /* Brand accent — Mooshie Yellow */
+  --accent-50:  #fffdf0;
+  --accent-100: #fff8d1;
+  --accent-200: #ffef9e;
+  --accent-300: #ffe680;
+  --accent-400: #ffd54d;   /* hover / lighter highlight */
+  --accent-500: #ffcc00;   /* PRIMARY brand yellow */
+  --accent-600: #cc9900;   /* primary button fill (resting) */
+  --accent-700: #a37a00;
+  --accent-800: #7a5c00;
+  --accent-900: #5c4600;
+  --accent-950: #3d2f00;
+  --accent-foreground: #111111;   /* text ON accent fills — near-black, never white */
+  --accent:        var(--accent-500);
+  --accent-hover:  var(--accent-400);
+
+  /* Page + surfaces. Surfaces are mixed from background toward a warm sub. */
+  --theme-sub:   var(--neutral-700);
+  --bg:          var(--neutral-950);
+  --surface-950: var(--bg);
+  --surface-900: color-mix(in srgb, var(--bg) 84%, var(--theme-sub) 16%);   /* panels */
+  --surface-800: color-mix(in srgb, var(--bg) 72%, var(--theme-sub) 28%);   /* inputs, raised chips */
+  --border-700:  color-mix(in srgb, var(--bg) 65%, var(--theme-sub) 35%);   /* hairline borders */
+
+  /* Text */
+  --text:          var(--neutral-100);   /* primary copy */
+  --text-strong:   var(--neutral-50);    /* emphasized values */
+  --text-muted:    var(--neutral-400);   /* labels */
+  --text-subtle:   var(--neutral-500);   /* hints, captions */
+  --text-disabled: var(--neutral-600);
+
+  /* Status / feedback */
+  --success:        #34d399;   /* emerald-400 */
+  --success-strong: #059669;   /* emerald-600 */
+  --success-text:   #6ee7b7;   /* emerald-300 */
+  --danger:         #b91c1c;   /* red-700 */
+  --danger-hover:   #dc2626;   /* red-600 */
+  --danger-text:    #f87171;   /* red-400 */
+  --warning:        #f59e0b;   /* amber-500 */
+  --warning-text:   #fbbf24;   /* amber-400 */
+  --info:           var(--accent-500);
+
+  /* Semantic roles this redesign adds on top of the system */
+  --accent-ink:     var(--accent-400);                                       /* accent-colored TEXT */
+  --rail-active-bg: color-mix(in srgb, var(--accent-500) 16%, transparent);
+  --rail-active-fg: var(--accent-500);
+  --fav-border:     color-mix(in srgb, var(--accent-500) 55%, var(--border-700));
+
+  /* Typography */
+  --font-sans: 'Hanken Grotesk', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+  --tracking-tight: -0.01em;
+  --tracking-wide: 0.04em;
+
+  /* Radii */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-2xl: 20px;
+  --radius-full: 9999px;
+
+  /* Controls + shell metrics */
+  --control-h-sm: 28px;
+  --control-h-md: 34px;
+  --control-h-lg: 44px;
+  --rail-width: 56px;
+  --scrollbar: 8px;
+
+  /* Effects */
+  --shadow-panel: 0 8px 28px rgba(0, 0, 0, 0.45);
+  --shadow-lg:    0 10px 24px rgba(0, 0, 0, 0.5);
+  --focus-ring:   0 0 0 2px color-mix(in srgb, var(--accent-500) 30%, transparent);
+
+  /* Motion */
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-out:      cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring:   cubic-bezier(0.34, 1.56, 0.64, 1);
+  --dur-fast: 0.15s;
+  --dur-base: 0.2s;
+  --dur-slow: 0.45s;
+}
+
+/* --------------------------------------------------------------------------
+   Tailwind color ramp → MooshieUI roles. Plain @theme (NOT @theme inline) so
+   the generated utilities reference var(--color-*), which lets `.light`
+   re-point the underlying role tokens at runtime.
+
+   The neutral *steps* are mapped to semantic roles (not literal greys) so
+   `bg-neutral-900` etc. invert under `.light` automatically.
+   -------------------------------------------------------------------------- */
+@theme {
+  --color-neutral-50:  var(--text-strong);
+  --color-neutral-100: var(--text);
+  --color-neutral-200: var(--text);
+  --color-neutral-300: var(--text);
+  --color-neutral-400: var(--text-muted);
+  --color-neutral-500: var(--text-subtle);
+  --color-neutral-600: var(--text-disabled);
+  --color-neutral-700: var(--border-700);
+  --color-neutral-800: var(--surface-800);
+  --color-neutral-900: var(--surface-900);
+  --color-neutral-950: var(--bg);
+
+  /* Accent ramp */
+  --color-accent-50:  var(--accent-50);
+  --color-accent-100: var(--accent-100);
+  --color-accent-200: var(--accent-200);
+  --color-accent-300: var(--accent-300);
+  --color-accent-400: var(--accent-400);
+  --color-accent-500: var(--accent-500);
+  --color-accent-600: var(--accent-600);
+  --color-accent-700: var(--accent-700);
+  --color-accent-800: var(--accent-800);
+  --color-accent-900: var(--accent-900);
+  --color-accent-950: var(--accent-950);
+  --color-accent-foreground: var(--accent-foreground);
+
+  /* Status */
+  --color-success:        var(--success);
+  --color-success-strong: var(--success-strong);
+  --color-success-text:   var(--success-text);
+  --color-danger:         var(--danger);
+  --color-danger-text:    var(--danger-text);
+  --color-warning:        var(--warning);
+  --color-warning-text:   var(--warning-text);
+
+  /* Legacy accent families remapped onto Mooshie-Yellow so existing utility
+     classes (indigo/amber/pink/sky) render in the single brand accent. */
+  --color-indigo-300: var(--accent-300);
+  --color-indigo-400: var(--accent-ink);
+  --color-indigo-500: var(--accent-500);
+  --color-indigo-600: var(--accent-500);
+
+  --color-amber-200: var(--accent-300);
+  --color-amber-400: var(--accent-ink);
+  --color-amber-500: var(--accent-500);
+  --color-amber-600: var(--accent-500);
+
+  --color-pink-300: var(--accent-300);
+  --color-pink-400: var(--accent-400);
+  --color-pink-500: var(--accent-500);
+  --color-pink-600: var(--accent-500);
+  --color-pink-700: var(--fav-border);
+
+  --color-sky-300: var(--accent-300);
+  --color-sky-400: var(--accent-ink);
+  --color-sky-500: var(--accent-500);
+  --color-sky-600: var(--accent-600);
+
+  /* Status families → semantic status tokens */
+  --color-emerald-300: var(--success-text);
+  --color-emerald-400: var(--success);
+  --color-emerald-500: var(--success);
+  --color-emerald-600: var(--success-strong);
+
+  --color-red-400: var(--danger-text);
+  --color-red-500: var(--danger-hover);
+  --color-red-700: var(--danger);
+
+  /* Fonts for Tailwind font-sans / font-mono utilities */
+  --font-sans: 'Hanken Grotesk', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+}
+
+/* --------------------------------------------------------------------------
+   Light variant — re-points the role tokens to warm paper values. Accent
+   fills stay yellow (dark text on them reads in both modes); accent *text*
+   and the rail active state shift to legible values. Toggled on <html>.
+   -------------------------------------------------------------------------- */
 .light {
-  --color-neutral-50:  oklch(14.5% 0 0);
-  --color-neutral-100: oklch(20.5% 0 0);
-  --color-neutral-200: oklch(26.9% 0 0);
-  --color-neutral-300: oklch(37.1% 0 0);
-  --color-neutral-400: oklch(43.9% 0 0);
-  --color-neutral-600: oklch(70.8% 0 0);
-  --color-neutral-700: oklch(87%   0 0);
-  --color-neutral-800: oklch(92.2% 0 0);
-  --color-neutral-900: oklch(97%   0 0);
-  --color-neutral-950: oklch(98.5% 0 0);
-  --color-red-400: oklch(42% 0.2 25);
+  --bg:           #edebe6;
+  --surface-950:  #f4f2ee;
+  --surface-900:  #fbfaf7;
+  --surface-800:  #ffffff;
+  --border-700:   #dbd8d1;
+  --neutral-700:  #e6e3dc;   /* slider rail, chip hover, secondary-btn hover */
+  --neutral-600:  #cfccc3;
+  --text:         #26241f;
+  --text-strong:  #100f0c;
+  --text-muted:   #5f5c54;
+  --text-subtle:  #8a867d;
+  --text-disabled:#b6b2a8;
+  --success-text: #047857;
+  --danger-text:  #b91c1c;   /* darker red stays legible on paper */
+  --accent-ink:   #8a6700;
+  --rail-active-bg: color-mix(in srgb, var(--accent-500) 62%, transparent);
+  --rail-active-fg: #5c4600;
+  --shadow-panel: 0 8px 28px rgba(40, 36, 28, 0.16);
+  --shadow-lg:    0 10px 24px rgba(40, 36, 28, 0.16);
+}
+
+/* --------------------------------------------------------------------------
+   Shell chrome — selection, focus, scrollbar, hover-reveal affordances.
+   -------------------------------------------------------------------------- */
+::selection { background: color-mix(in srgb, var(--accent-500) 35%, transparent); }
+
+::-webkit-scrollbar { width: var(--scrollbar); height: var(--scrollbar); }
+::-webkit-scrollbar-thumb { background: var(--border-700); border-radius: var(--radius-full); }
+::-webkit-scrollbar-thumb:hover { background: var(--neutral-600); }
+::-webkit-scrollbar-track { background: transparent; }
+
+input[type="number"]::-webkit-inner-spin-button { opacity: 0.4; }
+
+/* hover-reveal affordances on cards */
+.anima-card:hover .om-hover-reveal { opacity: 1 !important; }
+.anima-card:focus-visible { outline: 2px solid var(--accent-500); outline-offset: 2px; }
+
+/* --------------------------------------------------------------------------
+   Keyframes.
+   -------------------------------------------------------------------------- */
+@keyframes anima-fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes anima-pop {
+  0%   { opacity: 0; transform: translateY(8px) scale(0.97); }
+  60%  { opacity: 1; transform: translateY(-2px) scale(1.01); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 @keyframes fadeIn {

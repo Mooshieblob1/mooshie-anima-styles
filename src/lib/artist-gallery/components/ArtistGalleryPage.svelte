@@ -20,6 +20,7 @@
   type SortDir = "asc" | "desc";
   type PostCountFilter = "over50" | "all";
   type PageSize = 25 | 50 | 100;
+  type CardStyle = "gallery" | "index";
 
   // ---------------------------------------------------------------------------
   // Uniqueness scoring
@@ -97,11 +98,18 @@
   type Theme = "light" | "dark" | "auto";
   let theme = $state<Theme>((localStorage.getItem("theme") as Theme) ?? "auto");
   // Logarithmic card sizing: slider is 0–100, maps to 100–400px via power curve.
-  // Default 60 ≈ 230px (previous preferred size).
+  // Default 60 ≈ 230px (previous preferred size). Index cards pack tighter (82%).
   const CARD_PX_MIN = 100, CARD_PX_MAX = 400;
   let cardSliderVal = $state(Number(localStorage.getItem("cardSliderVal") || "60"));
+  let cardStyle = $state<CardStyle>(
+    localStorage.getItem("cardStyle") === "index" ? "index" : "gallery"
+  );
   const cardMinWidth = $derived(
-    Math.round(CARD_PX_MIN * (CARD_PX_MAX / CARD_PX_MIN) ** (cardSliderVal / 100))
+    Math.round(
+      CARD_PX_MIN *
+        (CARD_PX_MAX / CARD_PX_MIN) ** (cardSliderVal / 100) *
+        (cardStyle === "index" ? 0.82 : 1)
+    )
   );
   let systemDark = $state(window.matchMedia("(prefers-color-scheme: dark)").matches);
 
@@ -288,7 +296,6 @@
   let categories = $state<FavCategory[]>(JSON.parse(localStorage.getItem("favCategories") || "[]"));
   let activeCategoryId = $state<string | null>(null);
   let showCategoryManager = $state(false);
-  let showToolbar = $state(false);
   let catMenuSlug = $state<string | null>(null);
   let catMenuPos = $state({ top: 0, left: 0 });
   let newCatName = $state("");
@@ -334,7 +341,7 @@
     const cats = slugCategories(slug);
     if (cats.length > 0) return { cls: "", style: `border-color: ${cats[0].color};` };
     if (favourites.has(slug)) return { cls: "border-pink-700 hover:border-pink-500", style: "" };
-    return { cls: "border-neutral-800 hover:border-indigo-500", style: "" };
+    return { cls: "border-neutral-700 hover:border-indigo-500", style: "" };
   }
 
   function openCatMenu(slug: string, e: MouseEvent) {
@@ -751,249 +758,240 @@
   $effect(() => {
     localStorage.setItem("theme", theme);
     localStorage.setItem("cardSliderVal", String(cardSliderVal));
+    localStorage.setItem("cardStyle", cardStyle);
     localStorage.setItem("infiniteScroll", String(infiniteScroll));
     const isLight = theme === "light" || (theme === "auto" && !systemDark);
     document.documentElement.classList.toggle("light", isLight);
   });
+
+  /** Cycle the theme preference: auto → light → dark → auto. */
+  function cycleTheme() {
+    theme = theme === "auto" ? "light" : theme === "light" ? "dark" : "auto";
+  }
 </script>
 
 <svelte:document onclick={() => { closeCatMenu(); saveNote(); }} />
 
-<div class="flex h-full w-full flex-col overflow-hidden bg-neutral-950 text-neutral-100">
-  <header class="relative flex-none border-b border-neutral-800 bg-neutral-900/60 px-4 py-3">
-    <!-- Top bar (promo + theme toggle): in-flow on small screens, absolute on md+ -->
-    <div class="mb-2 flex items-center justify-between gap-2 md:mb-0">
-      <!-- MooshieUI promo -->
-      <a
-        href="https://github.com/Mooshieblob1/MooshieUI"
-        target="_blank"
-        rel="noopener noreferrer"
-        class="flex items-center gap-1.5 rounded-lg border border-neutral-800 bg-neutral-900/50 px-2 py-1 text-xs text-neutral-400 transition-colors hover:border-indigo-500 hover:text-neutral-200 md:absolute md:left-4 md:top-3"
-        title="MooshieUI — a beginner-friendly ComfyUI front-end"
-      >
-        <svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
-        <span>Enjoy this? Try <span class="text-indigo-400">MooshieUI</span> to generate AI art!</span>
-      </a>
-    <!-- Theme toggle -->
-    <div class="flex items-center gap-0.5 rounded-lg border border-neutral-800 bg-neutral-900/50 p-1 md:absolute md:right-4 md:top-3">
-      <button type="button" class="rounded px-2 py-0.5 text-xs transition-colors {theme === 'auto' ? 'bg-indigo-600 text-white' : 'text-neutral-400 hover:text-neutral-200'}" onclick={() => (theme = 'auto')} title="Auto (system)">⚙</button>
-      <button type="button" class="rounded px-2 py-0.5 text-xs transition-colors {theme === 'light' ? 'bg-indigo-600 text-white' : 'text-neutral-400 hover:text-neutral-200'}" onclick={() => (theme = 'light')} title="Light">☀</button>
-      <button type="button" class="rounded px-2 py-0.5 text-xs transition-colors {theme === 'dark' ? 'bg-indigo-600 text-white' : 'text-neutral-400 hover:text-neutral-200'}" onclick={() => (theme = 'dark')} title="Dark">🌙</button>
-    </div>
-    </div>
-    <div class="flex flex-col items-center gap-3">
-      <div class="order-2 lg:order-none flex flex-col items-center text-center">
-        <h1 class="text-[1.265rem] font-semibold">Anima Style Gallery</h1>
-        <p class="text-xs text-neutral-500">
-          created by <a
-            href="https://github.com/Mooshieblob1"
-            target="_blank"
-            rel="noopener noreferrer"
-            class="text-indigo-400 hover:text-indigo-300 transition-colors"
-          >Mooshieblob</a>
-        </p>
-        <p class="text-xs text-emerald-500 font-medium">Free forever</p>
-        <p class="text-xs text-neutral-500">
-          {#if store.manifest}
-            {uniqueArtistCount.toLocaleString()} artists ·
-            Anima 1.0 · release {store.manifest.releasePrefix} ·
-            <button type="button" onclick={() => (showGenInfo = true)} class="inline-flex items-center gap-1 rounded border border-neutral-700 bg-neutral-800/60 px-1.5 py-0.5 text-[11px] text-neutral-400 transition-colors hover:border-indigo-500 hover:text-neutral-200">
-              <svg viewBox="0 0 16 16" width="11" height="11" fill="currentColor" aria-hidden="true"><path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1Zm0 12.5a5.5 5.5 0 1 1 0-11 5.5 5.5 0 0 1 0 11ZM7.25 5h1.5v1.5h-1.5V5Zm0 3h1.5v3h-1.5V8Z"/></svg>
-              Gen Params
-            </button>
-          {:else if store.manifestError}
-            <span class="text-red-400">failed to load: {store.manifestError}</span>
-          {:else}
-            loading manifest…
+<!-- ===== Reusable icon + control snippets (MooshieUI rail / toolbar) ===== -->
+{#snippet icGrid()}
+  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+{/snippet}
+{#snippet icHeart()}
+  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+{/snippet}
+{#snippet icLayers()}
+  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2 2 7l10 5 10-5-10-5z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/></svg>
+{/snippet}
+{#snippet icInfo()}
+  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+{/snippet}
+{#snippet icGithub()}
+  <svg viewBox="0 0 16 16" width="18" height="18" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+{/snippet}
+{#snippet themeIcon()}
+  {#if theme === 'light'}
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+  {:else if theme === 'dark'}
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+  {:else}
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+  {/if}
+{/snippet}
+
+{#snippet railButton(icon: import('svelte').Snippet, label: string, isActive: boolean, onClick: () => void, badge: number | undefined)}
+  <div class="relative">
+    <button
+      type="button"
+      onclick={onClick}
+      aria-label={label}
+      title={label}
+      class="flex h-9 w-9 items-center justify-center rounded-lg text-neutral-400 transition-colors hover:bg-neutral-800 hover:text-neutral-200"
+      style={isActive ? "background: var(--rail-active-bg); color: var(--rail-active-fg);" : ""}
+    >{@render icon()}</button>
+    {#if badge}
+      <span class="pointer-events-none absolute -right-0.5 -top-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-accent-500 px-1 font-mono text-[9px] font-bold text-[var(--accent-foreground)]">{badge}</span>
+    {/if}
+  </div>
+{/snippet}
+{#snippet segBtn(label: string, isActive: boolean, onClick: () => void, titleText?: string)}
+  <button
+    type="button"
+    title={titleText}
+    onclick={onClick}
+    class="rounded px-2 py-0.5 text-xs font-medium transition-colors {isActive ? 'bg-accent-500 text-[var(--accent-foreground)]' : 'text-neutral-400 hover:text-neutral-200'}"
+  >{label}</button>
+{/snippet}
+
+<div class="flex h-full w-full overflow-hidden bg-neutral-950 text-neutral-100">
+  <!-- Left icon rail (desktop; collapses to the header top bar on mobile) -->
+  <nav class="hidden flex-none flex-col items-center gap-1 border-r border-neutral-700 bg-neutral-900 py-3 md:flex" style="width: var(--rail-width)" aria-label="Primary">
+    <img src="/favicon-32.png" alt="" class="mb-1 h-7 w-7 rounded-md" />
+    <div class="mb-1 h-px w-6 bg-neutral-700"></div>
+    {@render railButton(icGrid, "All styles", !showFavouritesOnly && !activeCategoryId, () => { showFavouritesOnly = false; activeCategoryId = null; cardAnimKey++; }, undefined)}
+    {@render railButton(icHeart, "Favourites", showFavouritesOnly, () => { showFavouritesOnly = !showFavouritesOnly; activeCategoryId = null; cardAnimKey++; }, favourites.size)}
+    {@render railButton(icLayers, "Categories", showCategoryManager, () => (showCategoryManager = true), undefined)}
+    <div class="flex-1"></div>
+    {@render railButton(themeIcon, `Theme: ${theme}`, false, cycleTheme, undefined)}
+    {@render railButton(icInfo, "Generation parameters", showGenInfo, () => (showGenInfo = true), undefined)}
+    <a href="https://github.com/Mooshieblob1" target="_blank" rel="noopener noreferrer" aria-label="GitHub" title="GitHub" class="flex h-9 w-9 items-center justify-center rounded-lg text-neutral-400 transition-colors hover:bg-neutral-800 hover:text-neutral-200">{@render icGithub()}</a>
+  </nav>
+
+  <!-- Main column -->
+  <div class="relative flex min-w-0 flex-1 flex-col overflow-hidden">
+    <header class="relative flex-none border-b border-neutral-700 bg-neutral-900 px-4 py-3">
+      <!-- Mobile top bar (rail collapses here) -->
+      <div class="mb-2.5 flex items-center gap-1 md:hidden">
+        <img src="/favicon-32.png" alt="" class="h-7 w-7 rounded-md" />
+        {@render railButton(icGrid, "All styles", !showFavouritesOnly && !activeCategoryId, () => { showFavouritesOnly = false; activeCategoryId = null; cardAnimKey++; }, undefined)}
+        {@render railButton(icHeart, "Favourites", showFavouritesOnly, () => { showFavouritesOnly = !showFavouritesOnly; activeCategoryId = null; cardAnimKey++; }, favourites.size)}
+        {@render railButton(icLayers, "Categories", showCategoryManager, () => (showCategoryManager = true), undefined)}
+        <div class="flex-1"></div>
+        {@render railButton(themeIcon, `Theme: ${theme}`, false, cycleTheme, undefined)}
+        {@render railButton(icInfo, "Generation parameters", showGenInfo, () => (showGenInfo = true), undefined)}
+        <a href="https://github.com/Mooshieblob1" target="_blank" rel="noopener noreferrer" aria-label="GitHub" title="GitHub" class="flex h-9 w-9 items-center justify-center rounded-lg text-neutral-400 transition-colors hover:bg-neutral-800 hover:text-neutral-200">{@render icGithub()}</a>
+      </div>
+
+      <!-- Row 1 — identity · search · promo -->
+      <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
+        <div class="min-w-0 shrink-0">
+          <h1 class="text-lg font-semibold tracking-tight text-neutral-50">Anima Style Gallery</h1>
+          <p class="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-neutral-400">
+            <span>created by <a href="https://github.com/Mooshieblob1" target="_blank" rel="noopener noreferrer" class="text-[var(--accent-ink)] transition-colors hover:text-accent-400">Mooshieblob</a></span>
+            <span class="text-neutral-600">·</span>
+            <span class="font-medium text-success-text">● Free forever</span>
+            {#if store.manifest}
+              <span class="text-neutral-600">·</span>
+              <span>{uniqueArtistCount.toLocaleString()} artists · Anima 1.0 · release {store.manifest.releasePrefix}</span>
+              <button type="button" onclick={() => (showGenInfo = true)} class="inline-flex items-center gap-1 rounded border border-neutral-700 bg-neutral-800 px-1.5 py-0.5 text-[11px] text-neutral-400 transition-colors hover:border-indigo-500 hover:text-neutral-200">
+                <svg viewBox="0 0 16 16" width="11" height="11" fill="currentColor" aria-hidden="true"><path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1Zm0 12.5a5.5 5.5 0 1 1 0-11 5.5 5.5 0 0 1 0 11ZM7.25 5h1.5v1.5h-1.5V5Zm0 3h1.5v3h-1.5V8Z"/></svg>
+                Gen Params
+              </button>
+            {:else if store.manifestError}
+              <span class="text-danger-text">failed to load: {store.manifestError}</span>
+            {:else}
+              <span>loading manifest…</span>
+            {/if}
+          </p>
+        </div>
+
+        <!-- Search -->
+        <div class="relative w-full md:w-auto md:max-w-md md:min-w-[14rem] md:flex-1">
+          <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor" aria-hidden="true" class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500"><path d="M11.74 10.68a6 6 0 1 0-1.06 1.06l3.04 3.04a.75.75 0 1 0 1.06-1.06l-3.04-3.04ZM7 11.5a4.5 4.5 0 1 1 0-9 4.5 4.5 0 0 1 0 9Z"/></svg>
+          <input
+            bind:this={searchInputEl}
+            type="search"
+            placeholder="Search artist tag… (just start typing)"
+            value={queryInput}
+            oninput={(e) => onSearchInput(e.currentTarget.value)}
+            class="w-full rounded-lg border border-neutral-700 bg-neutral-800 py-2 pl-9 pr-3 text-sm text-neutral-100 placeholder-neutral-500 transition-colors focus:border-indigo-500 focus:outline-none"
+          />
+          {#if queryInput.trim() && sortedEntries.length === 0 && !allLoading}
+            <span class="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-neutral-500">no results</span>
           {/if}
-        </p>
+        </div>
+
+        <!-- MooshieUI promo -->
+        <a
+          href="https://mooshieui.mooshieblob.com"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="flex shrink-0 items-center gap-1.5 rounded-lg border border-neutral-700 bg-neutral-800 px-2.5 py-1.5 text-xs text-neutral-300 transition-colors hover:border-accent-500 hover:text-neutral-50"
+          title="MooshieUI — a beginner-friendly ComfyUI front-end. Generate your own AI art!"
+        >
+          <svg viewBox="0 0 16 16" width="13" height="13" fill="currentColor" aria-hidden="true"><path d="M8 1.5 9.6 5l3.9.3-3 2.5.9 3.8L8 9.7l-3.4 1.9.9-3.8-3-2.5L5.4 5 8 1.5Z"/></svg>
+          <span>Try <span class="font-semibold text-[var(--accent-ink)]">MooshieUI</span></span>
+        </a>
       </div>
 
-      <!-- Search -->
-      <div class="order-1 lg:order-none relative w-full max-w-sm">
-        <input
-          bind:this={searchInputEl}
-          type="search"
-          placeholder="Search artist tag… (just start typing)"
-          value={queryInput}
-          oninput={(e) => onSearchInput(e.currentTarget.value)}
-          class="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-neutral-100 placeholder-neutral-500 focus:border-indigo-500 focus:outline-none"
-        />
-        {#if queryInput.trim() && sortedEntries.length === 0 && !allLoading}
-          <span class="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-neutral-500">no results</span>
-        {/if}
-      </div>
-    </div>
-
-    <!-- Sort + page size toolbar -->
+    <!-- Row 2 — scope chips · Row 3 — always-on toolbar -->
     {#if store.manifest}
-      <div class="mt-3 flex justify-center">
+      <div class="mt-3 flex flex-wrap items-center gap-1.5">
         <button
           type="button"
-          onclick={() => (showToolbar = !showToolbar)}
-          aria-expanded={showToolbar}
-          aria-controls="gallery-toolbar"
-          class="flex items-center gap-2 rounded-lg border border-neutral-800 bg-neutral-900/50 px-3 py-1 text-xs text-neutral-400 transition-colors hover:border-indigo-500 hover:text-neutral-200"
-          title="Toggle sort & filter options"
-        >
-          <span aria-hidden="true" class="flex flex-col gap-0.75">
-            <span class="block h-0.5 w-4 bg-current"></span>
-            <span class="block h-0.5 w-4 bg-current"></span>
-            <span class="block h-0.5 w-4 bg-current"></span>
-          </span>
-          <span>{showToolbar ? 'Hide' : 'Sort & filter'}</span>
-        </button>
-      </div>
-      {#if showToolbar}
-      <div id="gallery-toolbar" class="mt-2 flex flex-wrap items-center justify-center gap-2">
-        <div class="flex items-center gap-1.5 rounded-lg border border-neutral-800 bg-neutral-900/50 px-2 py-1" title="Card size (hotkeys: 4–0)">
-          <span class="text-xs text-neutral-500">Size:</span>
-          <input type="range" min="0" max="100" step="1" bind:value={cardSliderVal} class="w-20 accent-indigo-500" />
-        </div>
+          onclick={() => { showFavouritesOnly = false; activeCategoryId = null; cardAnimKey++; }}
+          class="flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors {!showFavouritesOnly && !activeCategoryId ? 'border-accent-500 bg-[var(--rail-active-bg)] text-neutral-50' : 'border-neutral-700 text-neutral-400 hover:text-neutral-200'}"
+        >All</button>
         <button
           type="button"
           onclick={() => { showFavouritesOnly = !showFavouritesOnly; activeCategoryId = null; cardAnimKey++; }}
-          class="flex items-center gap-1.5 rounded-lg border bg-neutral-900/50 px-2 py-1 text-xs transition-colors {showFavouritesOnly ? 'border-pink-600/60 text-pink-400 hover:text-pink-300' : 'border-neutral-800 text-neutral-400 hover:text-neutral-200'}"
-        >♥ Favourites{#if favourites.size > 0} ({favourites.size}){/if}</button>
+          class="flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors {showFavouritesOnly ? 'border-accent-500 bg-[var(--rail-active-bg)] text-neutral-50' : 'border-neutral-700 text-neutral-400 hover:text-neutral-200'}"
+        >♥ Favourites{#if favourites.size > 0}<span class="opacity-70">({favourites.size})</span>{/if}</button>
         {#each categories as cat (cat.id)}
           <button
             type="button"
             onclick={() => { activeCategoryId = activeCategoryId === cat.id ? null : cat.id; showFavouritesOnly = false; cardAnimKey++; }}
-            style="{activeCategoryId === cat.id ? `border-color: ${cat.color}; background-color: ${cat.color}18;` : ''}"
-            class="flex items-center gap-1.5 rounded-lg border bg-neutral-900/50 px-2 py-1 text-xs transition-colors {activeCategoryId === cat.id ? 'text-white' : 'border-neutral-800 text-neutral-400 hover:text-neutral-200'}"
+            style="{activeCategoryId === cat.id ? `border-color: ${cat.color}; background-color: ${cat.color}22;` : ''}"
+            class="flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors {activeCategoryId === cat.id ? 'text-neutral-50' : 'border-neutral-700 text-neutral-400 hover:text-neutral-200'}"
           >
             <span class="inline-block h-2 w-2 shrink-0 rounded-full" style="background-color: {cat.color};"></span>
-            {cat.name}{#if cat.slugs.length > 0}<span class="{activeCategoryId === cat.id ? 'text-white/60' : 'text-neutral-500'}"> ({cat.slugs.length})</span>{/if}
+            {cat.name}{#if cat.slugs.length > 0}<span class="opacity-70"> ({cat.slugs.length})</span>{/if}
           </button>
         {/each}
         <button
           type="button"
-          onclick={() => showCategoryManager = true}
-          class="flex items-center gap-1 rounded-lg border border-neutral-800 bg-neutral-900/50 px-2 py-1 text-xs text-neutral-400 transition-colors hover:text-neutral-200"
+          onclick={() => (showCategoryManager = true)}
+          class="flex items-center gap-1 rounded-full border border-dashed border-neutral-600 px-2.5 py-1 text-xs text-neutral-500 transition-colors hover:border-neutral-500 hover:text-neutral-300"
           title="Manage categories & export/import"
-        >⊞ Categories</button>
-        <div class="flex items-center gap-0.5 rounded-lg border border-neutral-800 bg-neutral-900/50 p-1">
-          <span class="px-1.5 text-xs text-neutral-500">Posts:</span>
-          <button
-            type="button"
-            class="rounded px-2 py-0.5 text-xs transition-colors {postCountFilter === 'over50' ? 'bg-indigo-600 text-white' : 'text-neutral-400 hover:text-neutral-200'}"
-            onclick={() => setPostCountFilter('over50')}
-            title="Show artists with more than 50 posts"
-          >
-            &gt;50
-          </button>
-          <button
-            type="button"
-            class="rounded px-2 py-0.5 text-xs transition-colors {postCountFilter === 'all' ? 'bg-indigo-600 text-white' : 'text-neutral-400 hover:text-neutral-200'}"
-            onclick={() => setPostCountFilter('all')}
-            title="Include capped ≤50 artists"
-          >
-            All
-          </button>
-        </div>
-        <div class="flex items-center gap-0.5 rounded-lg border border-neutral-800 bg-neutral-900/50 p-1">
-          <span class="px-1.5 text-xs text-neutral-500">Sort:</span>
-          <button
-            type="button"
-            class="rounded px-2 py-0.5 text-xs transition-colors {sortField === 'postCount' ? 'bg-indigo-600 text-white' : 'text-neutral-400 hover:text-neutral-200'}"
-            onclick={() => setSort('postCount')}
-          >
-            Post Count
-          </button>
-          <button
-            type="button"
-            class="rounded px-2 py-0.5 text-xs transition-colors {sortField === 'name' ? 'bg-indigo-600 text-white' : 'text-neutral-400 hover:text-neutral-200'}"
-            onclick={() => setSort('name')}
-          >
-            Name
-          </button>
-          <button
-            type="button"
-            class="rounded px-2 py-0.5 text-xs transition-colors {sortField === 'uniqueness' ? 'bg-amber-600 text-white' : 'text-neutral-400 hover:text-neutral-200'}"
-            onclick={() => setSort('uniqueness')}
-            title="Surfaces hidden gems: artists with a distinctive style not yet overexposed"
-          >
-            Trending
-          </button>
-          <div class="mx-1 h-3 w-px shrink-0 bg-neutral-700"></div>
+        >+ Manage</button>
+      </div>
+
+      <div class="mt-2.5 flex flex-wrap items-center gap-2">
+        <!-- Sort -->
+        <div class="flex items-center gap-1 rounded-md border border-neutral-700 bg-neutral-900 px-1.5 py-1">
+          <span class="px-1 text-[11px] font-medium uppercase tracking-wide text-neutral-500">Sort</span>
+          {@render segBtn('Posts', sortField === 'postCount', () => setSort('postCount'))}
+          {@render segBtn('Name', sortField === 'name', () => setSort('name'))}
+          {@render segBtn('Trending', sortField === 'uniqueness', () => setSort('uniqueness'), 'Surfaces hidden gems: a distinctive style not yet overexposed')}
+          <div class="mx-0.5 h-3.5 w-px bg-neutral-700"></div>
           {#if sortField === 'uniqueness'}
-            <button
-              type="button"
-              class="rounded px-2 py-0.5 text-xs text-amber-400 transition-colors hover:text-amber-200"
-              onclick={rotateUniqueness}
-              title="Reshuffle the uniqueness ranking to discover a fresh set of hidden gems"
-            >
-              ↻ Rotate
-            </button>
+            <button type="button" onclick={rotateUniqueness} title="Reshuffle the uniqueness ranking to discover a fresh set of hidden gems" class="rounded px-2 py-0.5 text-xs font-medium text-[var(--accent-ink)] transition-colors hover:text-accent-400">↻ Rotate</button>
           {:else if sortField === 'postCount'}
-            <button
-              type="button"
-              class="rounded px-2 py-0.5 text-xs transition-colors {sortDir === 'desc' ? 'bg-indigo-600 text-white' : 'text-neutral-400 hover:text-neutral-200'}"
-              onclick={() => setDir('desc')}
-              title="Maximum post count first"
-            >
-              Max
-            </button>
-            <button
-              type="button"
-              class="rounded px-2 py-0.5 text-xs transition-colors {sortDir === 'asc' ? 'bg-indigo-600 text-white' : 'text-neutral-400 hover:text-neutral-200'}"
-              onclick={() => setDir('asc')}
-              title="Minimum post count first"
-            >
-              Min
-            </button>
+            {@render segBtn('Max', sortDir === 'desc', () => setDir('desc'), 'Maximum post count first')}
+            {@render segBtn('Min', sortDir === 'asc', () => setDir('asc'), 'Minimum post count first')}
           {:else}
-            <button
-              type="button"
-              class="rounded px-2 py-0.5 text-xs transition-colors {sortDir === 'desc' ? 'bg-indigo-600 text-white' : 'text-neutral-400 hover:text-neutral-200'}"
-              onclick={() => setDir('desc')}
-              title="Z to A"
-            >
-              Z-A
-            </button>
-            <button
-              type="button"
-              class="rounded px-2 py-0.5 text-xs transition-colors {sortDir === 'asc' ? 'bg-indigo-600 text-white' : 'text-neutral-400 hover:text-neutral-200'}"
-              onclick={() => setDir('asc')}
-              title="A to Z"
-            >
-              A-Z
-            </button>
+            {@render segBtn('Z-A', sortDir === 'desc', () => setDir('desc'), 'Z to A')}
+            {@render segBtn('A-Z', sortDir === 'asc', () => setDir('asc'), 'A to Z')}
           {/if}
         </div>
 
-        {#if !infiniteScroll}
-        <div class="flex items-center gap-0.5 rounded-lg border border-neutral-800 bg-neutral-900/50 p-1">
-          <span class="px-1.5 text-xs text-neutral-500">Per page:</span>
-          {#each PAGE_SIZES as size}
-            <button
-              type="button"
-              class="rounded px-2 py-0.5 text-xs transition-colors {pageSize === size ? 'bg-indigo-600 text-white' : 'text-neutral-400 hover:text-neutral-200'}"
-              onclick={() => setPageSize(size)}
-            >
-              {size}
-            </button>
-          {/each}
+        <!-- Posts filter -->
+        <div class="flex items-center gap-1 rounded-md border border-neutral-700 bg-neutral-900 px-1.5 py-1">
+          <span class="px-1 text-[11px] font-medium uppercase tracking-wide text-neutral-500">Posts</span>
+          {@render segBtn('>50', postCountFilter === 'over50', () => setPostCountFilter('over50'), 'Show artists with more than 50 posts')}
+          {@render segBtn('All', postCountFilter === 'all', () => setPostCountFilter('all'), 'Include capped ≤50 artists')}
         </div>
+
+        <!-- View (card style + size) -->
+        <div class="flex items-center gap-1 rounded-md border border-neutral-700 bg-neutral-900 px-1.5 py-1" title="Card layout & size (size hotkeys: 4–0)">
+          <span class="px-1 text-[11px] font-medium uppercase tracking-wide text-neutral-500">View</span>
+          {@render segBtn('Gallery', cardStyle === 'gallery', () => { cardStyle = 'gallery'; cardAnimKey++; })}
+          {@render segBtn('Index', cardStyle === 'index', () => { cardStyle = 'index'; cardAnimKey++; })}
+          <input type="range" min="0" max="100" step="1" bind:value={cardSliderVal} class="ml-1 w-24 accent-[var(--accent-500)]" aria-label="Card size" />
+        </div>
+
+        <!-- Per page -->
+        {#if !infiniteScroll}
+          <div class="flex items-center gap-1 rounded-md border border-neutral-700 bg-neutral-900 px-1.5 py-1">
+            <span class="px-1 text-[11px] font-medium uppercase tracking-wide text-neutral-500">Per page</span>
+            {#each PAGE_SIZES as size}
+              {@render segBtn(String(size), pageSize === size, () => setPageSize(size))}
+            {/each}
+          </div>
         {/if}
-        <label class="flex cursor-pointer items-center gap-1.5 rounded-lg border bg-neutral-900/50 px-2 py-1 text-xs transition-colors {infiniteScroll ? 'border-indigo-600/40 text-indigo-400' : 'border-neutral-800 text-neutral-400 hover:text-neutral-200'}">
-          <input type="checkbox" bind:checked={infiniteScroll} onclick={() => { currentPage = 1; infiniteCount = pageSize; }} class="accent-indigo-500" />
+
+        <!-- Infinite scroll -->
+        <label class="flex cursor-pointer items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs transition-colors {infiniteScroll ? 'border-accent-500 text-[var(--accent-ink)]' : 'border-neutral-700 bg-neutral-900 text-neutral-400 hover:text-neutral-200'}">
+          <input type="checkbox" bind:checked={infiniteScroll} onclick={() => { currentPage = 1; infiniteCount = pageSize; }} class="accent-[var(--accent-500)]" />
           Infinite scroll
         </label>
-        <div class="flex items-center gap-0.5 rounded-lg border border-neutral-800 bg-neutral-900/50 p-1" title="Default preview image for artists that have two">
-          <span class="px-1.5 text-xs text-neutral-500">Image:</span>
-          {#each [1, 2] as v}
-            <button
-              type="button"
-              class="rounded px-2 py-0.5 text-xs transition-colors {globalVariant === v ? 'bg-indigo-600 text-white' : 'text-neutral-400 hover:text-neutral-200'}"
-              onclick={() => setGlobalVariant(v as 1 | 2)}
-            >
-              {v}
-            </button>
-          {/each}
+
+        <!-- Default preview image -->
+        <div class="flex items-center gap-1 rounded-md border border-neutral-700 bg-neutral-900 px-1.5 py-1" title="Default preview image for artists that have two">
+          <span class="px-1 text-[11px] font-medium uppercase tracking-wide text-neutral-500">Image</span>
+          {@render segBtn('1', globalVariant === 1, () => setGlobalVariant(1))}
+          {@render segBtn('2', globalVariant === 2, () => setGlobalVariant(2))}
         </div>
       </div>
-      {/if}
     {/if}
   </header>
 
@@ -1083,35 +1081,37 @@
                 </div>
               {/if}
               {#if sortField === 'uniqueness'}
-                <div class="absolute left-1 top-1 rounded bg-amber-600/90 px-1 py-0.5 text-[10px] font-mono font-bold leading-none text-white">
+                <div class="absolute left-1 top-1 rounded bg-accent-500 px-1 py-0.5 text-[10px] font-mono font-bold leading-none text-[var(--accent-foreground)]">
                   #{rank}
                 </div>
               {/if}
-              <button
-                type="button"
-                onclick={(e) => toggleFavourite(hit.slug, e)}
-                class="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-neutral-900/70 text-sm leading-none transition-colors hover:bg-neutral-900 {favourites.has(hit.slug) ? 'text-pink-500' : 'text-neutral-500 hover:text-pink-400'}"
-                aria-label="{favourites.has(hit.slug) ? 'Unfavourite' : 'Favourite'} {hit.tag}"
-                title="{favourites.has(hit.slug) ? 'Unfavourite' : 'Favourite'}"
-              >{favourites.has(hit.slug) ? '♥' : '♡'}</button>
-              {#if hasVariants(hit)}
+
+              <!-- Action overlay stack — fixed dark scrims so icons stay legible in light + dark -->
+              <div class="absolute right-1 top-1 flex flex-col items-end gap-1">
                 <button
                   type="button"
-                  onclick={(e) => toggleCardVariant(hit, e)}
-                  class="absolute right-1 top-9 flex h-6 items-center gap-0.5 rounded-full bg-neutral-900/70 px-1.5 text-[10px] font-semibold leading-none transition-colors hover:bg-neutral-900 hover:text-white {variantOverrides[hit.slug] ? 'text-indigo-400 ring-1 ring-indigo-500/60' : 'text-neutral-300'}"
-                  aria-label="Switch preview image for {hit.tag}"
-                  title="Showing image {effectiveVariant(hit)} — click to flip"
-                >
-                  <svg viewBox="0 0 16 16" width="9" height="9" fill="currentColor" aria-hidden="true"><path d="M4 4h7V2l3 3-3 3V6H4V4zm8 8H5v2l-3-3 3-3v2h7v2z"/></svg>
-                  {effectiveVariant(hit)}
-                </button>
-              {/if}
-              {#if favourites.has(hit.slug)}
-                <div class="absolute left-1 bottom-1 flex items-center gap-1">
+                  onclick={(e) => toggleFavourite(hit.slug, e)}
+                  class="flex h-6 w-6 items-center justify-center rounded-full bg-[rgba(10,10,10,0.66)] text-sm leading-none backdrop-blur-[2px] transition-colors hover:bg-[rgba(10,10,10,0.92)] {favourites.has(hit.slug) ? 'text-accent-500' : 'text-[var(--neutral-300)] hover:text-accent-400'}"
+                  aria-label="{favourites.has(hit.slug) ? 'Unfavourite' : 'Favourite'} {hit.tag}"
+                  title="{favourites.has(hit.slug) ? 'Unfavourite' : 'Favourite'}"
+                >{favourites.has(hit.slug) ? '♥' : '♡'}</button>
+                {#if hasVariants(hit)}
+                  <button
+                    type="button"
+                    onclick={(e) => toggleCardVariant(hit, e)}
+                    class="flex h-6 items-center gap-0.5 rounded-full bg-[rgba(10,10,10,0.66)] px-1.5 text-[10px] font-semibold leading-none backdrop-blur-[2px] transition-colors hover:bg-[rgba(10,10,10,0.92)] {variantOverrides[hit.slug] ? 'text-accent-400 ring-1 ring-accent-500/60' : 'text-[var(--neutral-300)]'}"
+                    aria-label="Switch preview image for {hit.tag}"
+                    title="Showing image {effectiveVariant(hit)} — click to flip"
+                  >
+                    <svg viewBox="0 0 16 16" width="9" height="9" fill="currentColor" aria-hidden="true"><path d="M4 4h7V2l3 3-3 3V6H4V4zm8 8H5v2l-3-3 3-3v2h7v2z"/></svg>
+                    {effectiveVariant(hit)}
+                  </button>
+                {/if}
+                {#if favourites.has(hit.slug)}
                   <button
                     type="button"
                     onclick={(e) => openCatMenu(hit.slug, e)}
-                    class="flex items-center gap-0.5 rounded bg-neutral-900/70 px-1 py-0.5 leading-none transition-colors hover:bg-neutral-900 {catDots.length > 0 ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}"
+                    class="flex h-6 items-center gap-0.5 rounded-full bg-[rgba(10,10,10,0.66)] px-1.5 leading-none backdrop-blur-[2px] transition-colors hover:bg-[rgba(10,10,10,0.92)] {catDots.length > 0 ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}"
                     aria-label="Assign to category"
                     title="Assign to category"
                   >
@@ -1119,45 +1119,58 @@
                       {#each catDots.slice(0, 3) as cat}
                         <span class="inline-block h-2 w-2 shrink-0 rounded-full" style="background-color: {cat.color};"></span>
                       {/each}
-                      {#if catDots.length > 3}<span class="text-[9px] text-neutral-400">+{catDots.length - 3}</span>{/if}
+                      {#if catDots.length > 3}<span class="text-[9px] text-[var(--neutral-300)]">+{catDots.length - 3}</span>{/if}
                     {:else}
-                      <svg viewBox="0 0 16 16" width="9" height="9" fill="currentColor" class="text-neutral-400"><path d="M7.75 2a.75.75 0 0 1 .75.75V7h4.25a.75.75 0 0 1 0 1.5H8.5v4.25a.75.75 0 0 1-1.5 0V8.5H2.75a.75.75 0 0 1 0-1.5H7V2.75A.75.75 0 0 1 7.75 2z"/></svg>
+                      <svg viewBox="0 0 16 16" width="9" height="9" fill="currentColor" class="text-[var(--neutral-300)]"><path d="M7.75 2a.75.75 0 0 1 .75.75V7h4.25a.75.75 0 0 1 0 1.5H8.5v4.25a.75.75 0 0 1-1.5 0V8.5H2.75a.75.75 0 0 1 0-1.5H7V2.75A.75.75 0 0 1 7.75 2z"/></svg>
                     {/if}
                   </button>
                   <button
                     type="button"
                     onclick={(e) => openNoteEditor(hit.slug, e)}
-                    class="flex items-center rounded bg-neutral-900/70 px-1 py-0.5 leading-none transition-colors hover:bg-neutral-900 {notes[hit.slug] ? 'opacity-100 text-sky-400' : 'opacity-0 group-hover:opacity-100 text-neutral-400'}"
+                    class="flex h-6 w-6 items-center justify-center rounded-full bg-[rgba(10,10,10,0.66)] leading-none backdrop-blur-[2px] transition-colors hover:bg-[rgba(10,10,10,0.92)] {notes[hit.slug] ? 'opacity-100 text-accent-400' : 'opacity-0 group-hover:opacity-100 text-[var(--neutral-300)]'}"
                     aria-label="{notes[hit.slug] ? 'Edit note for' : 'Add note for'} {hit.tag}"
                     title="{notes[hit.slug] ? 'Edit note' : 'Add note'}"
                   >
                     <svg viewBox="0 0 16 16" width="9" height="9" fill="currentColor"><path d="M11.013 1.427a1.75 1.75 0 0 1 2.474 0l1.086 1.086a1.75 1.75 0 0 1 0 2.474l-8.61 8.61c-.21.21-.47.364-.756.445l-3.251.93a.75.75 0 0 1-.927-.928l.929-3.25c.081-.286.235-.547.445-.758l8.61-8.61Zm.176 4.823L9.75 4.81l-6.286 6.287a.253.253 0 0 0-.064.108l-.558 1.953 1.953-.558a.253.253 0 0 0 .108-.064Zm1.238-3.763a.25.25 0 0 0-.354 0L10.811 3.75l1.439 1.44 1.263-1.263a.25.25 0 0 0 0-.354Z"/></svg>
                   </button>
+                {/if}
+                <button
+                  type="button"
+                  onclick={(e) => { e.stopPropagation(); void copyTag(hit.tag, hit.slug); }}
+                  class="flex h-6 w-6 items-center justify-center rounded-full bg-[rgba(10,10,10,0.66)] leading-none opacity-0 backdrop-blur-[2px] transition-opacity group-hover:opacity-100 hover:bg-[rgba(10,10,10,0.92)] {copiedSlug === hit.slug ? 'text-emerald-400' : 'text-[var(--neutral-300)]'}"
+                  aria-label="Copy tag {hit.tag}"
+                  title="Copy tag"
+                >
+                  {#if copiedSlug === hit.slug}
+                    <svg viewBox="0 0 16 16" width="11" height="11" fill="currentColor"><path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 0 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0z"/></svg>
+                  {:else}
+                    <svg viewBox="0 0 16 16" width="11" height="11" fill="currentColor"><path d="M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 0 1 0 1.5h-1.5a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-1.5a.75.75 0 0 1 1.5 0v1.5A1.75 1.75 0 0 1 9.25 16h-7.5A1.75 1.75 0 0 1 0 14.25Z"/><path d="M5 1.75C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0 1 14.25 11h-7.5A1.75 1.75 0 0 1 5 9.25Zm1.75-.25a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-7.5a.25.25 0 0 0-.25-.25Z"/></svg>
+                  {/if}
+                </button>
+              </div>
+
+              {#if cardStyle === 'gallery'}
+                <div
+                  class="pointer-events-none absolute inset-x-0 bottom-0 flex flex-col gap-0.5 px-2 pb-1.5 pt-7"
+                  style="background: linear-gradient(to top, rgba(10,10,10,0.92) 8%, rgba(10,10,10,0.55) 55%, transparent 100%);"
+                >
+                  <span class="truncate text-sm font-medium text-[var(--neutral-100)]">{displayTag(hit.tag)}</span>
+                  <span class="text-[11px] text-[var(--neutral-300)]">{formatCount(hit.postCount, hit.belowThreshold)}</span>
                 </div>
               {/if}
-              <button
-                type="button"
-                onclick={(e) => { e.stopPropagation(); void copyTag(hit.tag, hit.slug); }}
-                class="absolute right-1 bottom-1 flex h-6 w-6 items-center justify-center rounded-full bg-neutral-900/70 text-neutral-500 leading-none opacity-0 transition-opacity group-hover:opacity-100 hover:bg-neutral-900 hover:text-neutral-200"
-                aria-label="Copy tag {hit.tag}"
-                title="Copy tag"
-              >
-                {#if copiedSlug === hit.slug}
-                  <svg viewBox="0 0 16 16" width="11" height="11" fill="currentColor" class="text-emerald-400"><path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 0 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0z"/></svg>
-                {:else}
-                  <svg viewBox="0 0 16 16" width="11" height="11" fill="currentColor"><path d="M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 0 1 0 1.5h-1.5a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-1.5a.75.75 0 0 1 1.5 0v1.5A1.75 1.75 0 0 1 9.25 16h-7.5A1.75 1.75 0 0 1 0 14.25Z"/><path d="M5 1.75C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0 1 14.25 11h-7.5A1.75 1.75 0 0 1 5 9.25Zm1.75-.25a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-7.5a.25.25 0 0 0-.25-.25Z"/></svg>
-                {/if}
-              </button>
             </div>
-            <div class="flex items-center justify-between gap-2 px-2 py-1.5">
-              <span class="truncate text-sm text-red-400">{displayTag(hit.tag)}</span>
-              <span class="shrink-0 text-xs text-neutral-500">{formatCount(hit.postCount, hit.belowThreshold)}</span>
-            </div>
+
+            {#if cardStyle === 'index'}
+              <div class="flex items-center justify-between gap-2 px-2 py-1.5">
+                <span class="truncate text-sm text-neutral-100">{displayTag(hit.tag)}</span>
+                <span class="shrink-0 text-xs text-neutral-500">{formatCount(hit.postCount, hit.belowThreshold)}</span>
+              </div>
+            {/if}
             {#if notes[hit.slug]}
               <button
                 type="button"
                 onclick={(e) => openNoteEditor(hit.slug, e)}
-                class="-mt-1 w-full truncate px-2 pb-1.5 text-left text-xs italic text-sky-400/90 transition-colors hover:text-sky-300"
+                class="w-full truncate px-2 pb-1.5 pt-1 text-left text-xs italic text-[var(--accent-ink)] transition-colors hover:text-accent-400"
                 title="{notes[hit.slug]} — click to edit"
               >{notes[hit.slug]}</button>
             {/if}
@@ -1241,8 +1254,15 @@
         href="https://gpu.garden"
         target="_blank"
         rel="noopener noreferrer"
-        class="text-indigo-400 transition-colors hover:text-indigo-300"
+        class="text-[var(--accent-ink)] transition-colors hover:text-accent-400"
       >fartcore</a></span>
+      <span>·</span>
+      <a
+        href="https://mooshieui.mooshieblob.com"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="text-[var(--accent-ink)] transition-colors hover:text-accent-400"
+      >Pairs with MooshieUI ↗</a>
     </div>
   </footer>
 
@@ -1252,12 +1272,13 @@
     onclick={scrollToTop}
     aria-label="Scroll to top"
     title="Scroll to top"
-    class="lg:hidden fixed bottom-4 right-4 z-40 flex h-11 w-11 items-center justify-center rounded-full border border-neutral-700 bg-neutral-900/90 text-neutral-200 shadow-lg backdrop-blur transition-all hover:border-indigo-500 hover:text-white {scrolled ? 'opacity-100 translate-y-0 pointer-events-auto' : 'opacity-0 translate-y-2 pointer-events-none'}"
+    class="lg:hidden fixed bottom-4 right-4 z-40 flex h-11 w-11 items-center justify-center rounded-full border border-neutral-700 bg-neutral-900/90 text-neutral-200 shadow-lg backdrop-blur transition-all hover:border-accent-500 hover:text-neutral-50 {scrolled ? 'opacity-100 translate-y-0 pointer-events-auto' : 'opacity-0 translate-y-2 pointer-events-none'}"
   >
     <svg viewBox="0 0 20 20" width="18" height="18" fill="currentColor" aria-hidden="true">
       <path d="M10 4l-6 6h4v6h4v-6h4z"/>
     </svg>
   </button>
+  </div>
 </div>
 
 {#if catMenuSlug}
@@ -1321,7 +1342,7 @@
       />
       <button
         type="submit"
-        class="shrink-0 rounded-md bg-sky-600 px-2 py-1 text-xs font-medium text-white transition-colors hover:bg-sky-500"
+        class="shrink-0 rounded-md bg-accent-500 px-2 py-1 text-xs font-medium text-[var(--accent-foreground)] transition-colors hover:bg-accent-400"
       >Save</button>
     </form>
   </div>
@@ -1377,7 +1398,7 @@
           <button
             type="submit"
             disabled={!newCatName.trim()}
-            class="shrink-0 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-40"
+            class="shrink-0 rounded-lg bg-accent-500 px-3 py-1.5 text-xs font-medium text-[var(--accent-foreground)] transition-colors hover:bg-accent-400 disabled:cursor-not-allowed disabled:opacity-40"
           >Add</button>
         </form>
       </div>
@@ -1437,14 +1458,14 @@
         aria-label="Close"
       >✕</button>
       <h2 class="mb-4 text-base font-semibold text-neutral-100">How preview images are generated</h2>
-      <p class="mb-4 text-xs text-neutral-500">Each artist card image is generated using the artist's tag as the sole prompt token. No additional positive or negative prompts are used — this isolates each artist's raw style.</p>
+      <p class="mb-4 text-xs text-neutral-500">Every artist gets two preview images (Image 1 and Image 2). Each is rendered from a fixed prompt template where only the <span class="font-mono text-neutral-400">{`{artist_tag}`}</span> token changes from artist to artist — so the differences you see between cards reflect each artist's style, not the prompt. The two templates use different scenes to show a bit of range.</p>
 
       <h3 class="mb-2 text-xs font-semibold uppercase tracking-wider text-neutral-400">Model Stack</h3>
       <table class="mb-4 w-full text-xs">
         <tbody>
           <tr class="border-b border-neutral-800">
             <td class="py-1.5 pr-3 text-neutral-500">UNet</td>
-            <td class="py-1.5 font-mono text-neutral-200">anima-preview2.safetensors</td>
+            <td class="py-1.5 font-mono text-neutral-200">anima-base-v1.0.safetensors</td>
           </tr>
           <tr class="border-b border-neutral-800">
             <td class="py-1.5 pr-3 text-neutral-500">Text encoder</td>
@@ -1470,19 +1491,23 @@
           </tr>
           <tr class="border-b border-neutral-800">
             <td class="py-1.5 pr-3 text-neutral-500">Steps</td>
-            <td class="py-1.5 font-mono text-neutral-200">30</td>
+            <td class="py-1.5 font-mono text-neutral-200">25</td>
           </tr>
           <tr class="border-b border-neutral-800">
             <td class="py-1.5 pr-3 text-neutral-500">CFG</td>
             <td class="py-1.5 font-mono text-neutral-200">4.0</td>
           </tr>
           <tr class="border-b border-neutral-800">
+            <td class="py-1.5 pr-3 text-neutral-500">Denoise</td>
+            <td class="py-1.5 font-mono text-neutral-200">1.0</td>
+          </tr>
+          <tr class="border-b border-neutral-800">
             <td class="py-1.5 pr-3 text-neutral-500">Seed</td>
-            <td class="py-1.5 font-mono text-neutral-200">42 <span class="text-neutral-500">(fixed)</span></td>
+            <td class="py-1.5 font-mono text-neutral-200">7243057331061028000 <span class="text-neutral-500">(fixed)</span></td>
           </tr>
           <tr>
             <td class="py-1.5 pr-3 text-neutral-500">Resolution</td>
-            <td class="py-1.5 font-mono text-neutral-200">896 × 1152</td>
+            <td class="py-1.5 font-mono text-neutral-200">896 × 1152 <span class="text-neutral-500">(latent)</span></td>
           </tr>
         </tbody>
       </table>
@@ -1492,24 +1517,32 @@
         <tbody>
           <tr class="border-b border-neutral-800">
             <td class="py-1.5 pr-3 text-neutral-500">Format</td>
-            <td class="py-1.5 font-mono text-neutral-200">WEBP</td>
+            <td class="py-1.5 font-mono text-neutral-200">AVIF</td>
+          </tr>
+          <tr class="border-b border-neutral-800">
+            <td class="py-1.5 pr-3 text-neutral-500">Delivered size</td>
+            <td class="py-1.5 font-mono text-neutral-200">720 × 926</td>
           </tr>
           <tr>
-            <td class="py-1.5 pr-3 text-neutral-500">Thumbnail size</td>
-            <td class="py-1.5 font-mono text-neutral-200">540 × 720</td>
+            <td class="py-1.5 pr-3 text-neutral-500">Quality</td>
+            <td class="py-1.5 font-mono text-neutral-200">80 <span class="text-neutral-500">(4:2:0)</span></td>
           </tr>
         </tbody>
       </table>
 
       <h3 class="mb-2 text-xs font-semibold uppercase tracking-wider text-neutral-400">Prompts</h3>
+      <p class="mb-2 text-xs text-neutral-500">The <span class="font-mono text-neutral-400">{`{artist_tag}`}</span> token is swapped for each artist's tag; everything else is fixed. Image 1 and Image 2 share a quality preamble but use different scene templates.</p>
       <div class="space-y-2 text-xs">
         <div>
-          <div class="mb-1 text-neutral-500">Positive:</div>
-          <div class="rounded border border-neutral-700 bg-neutral-800 px-3 py-2 font-mono text-neutral-200 leading-relaxed">{`{artist_tag}`}, year 2025, newest, masterpiece, best quality, score_9, score_8, highres, safe, 1girl, hatsune miku, from above, sitting, bench, school, serafuku, fence, long sleeves, outdoors, hamburger, eating, blue sky, plant</div>
-          <div class="mt-1 text-neutral-600">The artist's tag is prepended as the first token.</div>
+          <div class="mb-1 text-neutral-500">Positive — Image 1 <span class="text-neutral-600">(-p1)</span>:</div>
+          <div class="rounded border border-neutral-700 bg-neutral-800 px-3 py-2 font-mono text-neutral-200 leading-relaxed">{`{artist_tag}`}, year 2025, newest, masterpiece, best quality, score_9, score_8, highres, safe, 1girl, hatsune miku, straight-on, cowboy shot, school, serafuku, fence, long sleeves, outdoors, hamburger, eating, blue sky, plant</div>
         </div>
         <div>
-          <div class="mb-1 text-neutral-500">Negative:</div>
+          <div class="mb-1 text-neutral-500">Positive — Image 2 <span class="text-neutral-600">(-p2)</span>:</div>
+          <div class="rounded border border-neutral-700 bg-neutral-800 px-3 py-2 font-mono text-neutral-200 leading-relaxed">{`{artist_tag}`}, year 2025, newest, masterpiece, best quality, score_9, score_8, highres, safe, 1girl, solo, umbrella, standing, holding umbrella, mouse girl, mouse ears, mouse tail, raincoat, yellow raincoat, rubber boots, yellow footwear, street, rain, raining, cowboy shot, black hair, long hair, blunt bangs, blunt ends, blue eyes, straight-on</div>
+        </div>
+        <div>
+          <div class="mb-1 text-neutral-500">Negative <span class="text-neutral-600">(shared)</span>:</div>
           <div class="rounded border border-neutral-700 bg-neutral-800 px-3 py-2 font-mono text-neutral-300 leading-relaxed">worst quality, low quality, score_1, score_2, score_3, blurry, jpeg artifacts, sepia, sensitive, nsfw, explicit</div>
         </div>
       </div>

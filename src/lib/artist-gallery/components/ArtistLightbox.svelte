@@ -96,7 +96,7 @@
     <button
       type="button"
       onclick={onprev}
-      class="absolute left-3 top-1/2 z-20 -translate-y-1/2 flex items-center justify-center rounded-full border-2 border-neutral-400 bg-neutral-800 text-white shadow-lg transition-colors hover:border-indigo-400 hover:bg-neutral-700 focus:outline-none"
+      class="absolute left-3 top-1/2 z-20 -translate-y-1/2 flex items-center justify-center rounded-full border-2 border-neutral-600 bg-neutral-800 text-neutral-100 shadow-lg transition-colors hover:border-accent-500 hover:bg-neutral-700 focus:outline-none"
       style="width: clamp(2.5rem, 2.5vw, 4rem); height: clamp(2.5rem, 2.5vw, 4rem); font-size: clamp(1.1rem, 1.4vw, 1.8rem);"
       aria-label="Previous artist"
     >
@@ -107,7 +107,7 @@
     <button
       type="button"
       onclick={onnext}
-      class="absolute right-3 top-1/2 z-20 -translate-y-1/2 flex items-center justify-center rounded-full border-2 border-neutral-400 bg-neutral-800 text-white shadow-lg transition-colors hover:border-indigo-400 hover:bg-neutral-700 focus:outline-none"
+      class="absolute right-3 top-1/2 z-20 -translate-y-1/2 flex items-center justify-center rounded-full border-2 border-neutral-600 bg-neutral-800 text-neutral-100 shadow-lg transition-colors hover:border-accent-500 hover:bg-neutral-700 focus:outline-none"
       style="width: clamp(2.5rem, 2.5vw, 4rem); height: clamp(2.5rem, 2.5vw, 4rem); font-size: clamp(1.1rem, 1.4vw, 1.8rem);"
       aria-label="Next artist"
     >
@@ -150,7 +150,7 @@
           href="https://danbooru.donmai.us/artists/show_or_new?name={encodeURIComponent(entry.tag.replace(/^@/, ''))}"
           target="_blank"
           rel="noopener noreferrer"
-          class="block truncate text-base font-medium text-red-400 hover:underline"
+          class="block truncate text-base font-medium text-[var(--accent-ink)] hover:underline"
         >
           {displayTag(entry.tag)}
         </a>
@@ -186,7 +186,7 @@
         {#if oninsertTag}
           <button
             type="button"
-            class="rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-indigo-500"
+            class="rounded-md bg-accent-500 px-3 py-1.5 text-xs font-medium text-[var(--accent-foreground)] transition-colors hover:bg-accent-400"
             onclick={() => oninsertTag?.(formatCopiedTag(entry.tag))}
           >
             Insert into prompt

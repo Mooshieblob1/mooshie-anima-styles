@@ -240,7 +240,7 @@
         <button
           type="button"
           onclick={() => pickPreset(p)}
-          class="h-6 w-full rounded border-2 transition-transform hover:scale-110 {currHex.toLowerCase() === p.toLowerCase() ? 'border-white scale-110' : 'border-transparent'}"
+          class="h-6 w-full rounded border-2 transition-transform hover:scale-110 {currHex.toLowerCase() === p.toLowerCase() ? 'border-[var(--text-strong)] scale-110' : 'border-transparent'}"
           style="background-color: {p};"
           title={p}
         ></button>
